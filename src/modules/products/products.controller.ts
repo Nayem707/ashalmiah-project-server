@@ -10,6 +10,15 @@ function toBool(v: unknown): boolean | undefined {
   return undefined;
 }
 
+function parseCsv(v?: string): string[] | undefined {
+  if (!v) return undefined;
+  const values = v
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+  return values.length ? values : undefined;
+}
+
 export const productsController = {
   list: asyncHandler(async (req: Request, res: Response) => {
     const { page, limit, skip } = getPagination(req);
@@ -20,6 +29,8 @@ export const productsController = {
       skip,
       search: q.search,
       category: q.category,
+      colors: parseCsv(q.color),
+      sizes: parseCsv(q.size),
       status: q.status as 'ACTIVE' | 'DRAFT' | 'ARCHIVED' | undefined,
       minPrice: q.minPrice ? Number(q.minPrice) : undefined,
       maxPrice: q.maxPrice ? Number(q.maxPrice) : undefined,

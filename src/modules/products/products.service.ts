@@ -56,6 +56,8 @@ interface ListParams {
   skip: number;
   search?: string;
   category?: string;
+  colors?: string[];
+  sizes?: string[];
   status?: 'ACTIVE' | 'DRAFT' | 'ARCHIVED';
   minPrice?: number;
   maxPrice?: number;
@@ -92,6 +94,32 @@ export const productsService = {
         ? {
             category: {
               OR: [{ id: params.category }, { slug: params.category }],
+            },
+          }
+        : {}),
+      ...(params.colors?.length
+        ? {
+            colors: {
+              some: {
+                OR: params.colors.map((value) => ({
+                  color: {
+                    OR: [{ id: value }, { name: { equals: value, mode: 'insensitive' } }],
+                  },
+                })),
+              },
+            },
+          }
+        : {}),
+      ...(params.sizes?.length
+        ? {
+            sizes: {
+              some: {
+                OR: params.sizes.map((value) => ({
+                  size: {
+                    OR: [{ id: value }, { name: { equals: value, mode: 'insensitive' } }],
+                  },
+                })),
+              },
             },
           }
         : {}),

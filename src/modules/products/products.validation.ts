@@ -6,6 +6,8 @@ export const listProductsSchema = z.object({
     limit: z.coerce.number().int().positive().max(100).optional(),
     search: z.string().optional(),
     category: z.string().optional(), // category id or slug
+    color: z.string().optional(), // comma-separated color ids or names
+    size: z.string().optional(), // comma-separated size ids or names
     status: z.enum(['ACTIVE', 'DRAFT', 'ARCHIVED']).optional(),
     minPrice: z.coerce.number().nonnegative().optional(),
     maxPrice: z.coerce.number().nonnegative().optional(),
