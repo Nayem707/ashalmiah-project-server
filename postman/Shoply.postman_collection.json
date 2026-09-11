@@ -409,356 +409,392 @@
       "description": "Authenticated customer endpoints: profile, addresses, cart, wishlist, reviews, and orders.",
       "item": [
         {
-          "name": "Get My Profile",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/users/me",
-              "host": ["{{baseUrl}}"],
-              "path": ["users", "me"]
-            }
-          }
-        },
-        {
-          "name": "Update My Profile",
-          "request": {
-            "method": "PATCH",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"name\": \"Jane Doe\",\n  \"phone\": \"+1 202 555 0199\",\n  \"avatarUrl\": \"https://i.pravatar.cc/150?img=12\"\n}",
-              "options": { "raw": { "language": "json" } }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/users/me",
-              "host": ["{{baseUrl}}"],
-              "path": ["users", "me"]
-            }
-          }
-        },
-        {
-          "name": "Change My Password",
-          "request": {
-            "method": "PATCH",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"currentPassword\": \"Passw0rd!\",\n  \"newPassword\": \"NewPassw0rd!\"\n}",
-              "options": { "raw": { "language": "json" } }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/users/me/password",
-              "host": ["{{baseUrl}}"],
-              "path": ["users", "me", "password"]
-            }
-          }
-        },
-        {
-          "name": "List My Addresses",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/users/me/addresses",
-              "host": ["{{baseUrl}}"],
-              "path": ["users", "me", "addresses"]
-            }
-          }
-        },
-        {
-          "name": "Create Address",
-          "event": [
+          "name": "Profile",
+          "description": "Account profile and password.",
+          "item": [
             {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "const res = pm.response.json();",
-                  "if (res && res.data && res.data.id) pm.collectionVariables.set('addressId', res.data.id);"
-                ]
+              "name": "Get My Profile",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/users/me",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["users", "me"]
+                }
+              }
+            },
+            {
+              "name": "Update My Profile",
+              "request": {
+                "method": "PATCH",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"Jane Doe\",\n  \"phone\": \"+1 202 555 0199\",\n  \"avatarUrl\": \"https://i.pravatar.cc/150?img=12\"\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/users/me",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["users", "me"]
+                }
+              }
+            },
+            {
+              "name": "Change My Password",
+              "request": {
+                "method": "PATCH",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"currentPassword\": \"Passw0rd!\",\n  \"newPassword\": \"NewPassw0rd!\"\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/users/me/password",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["users", "me", "password"]
+                }
               }
             }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"type\": \"SHIPPING\",\n  \"fullName\": \"Jane Doe\",\n  \"phone\": \"+1 202 555 0199\",\n  \"country\": \"United States\",\n  \"city\": \"Springfield\",\n  \"area\": \"Downtown\",\n  \"street\": \"742 Evergreen Terrace\",\n  \"postalCode\": \"62704\",\n  \"isDefault\": true\n}",
-              "options": { "raw": { "language": "json" } }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/users/me/addresses",
-              "host": ["{{baseUrl}}"],
-              "path": ["users", "me", "addresses"]
-            }
-          }
+          ]
         },
         {
-          "name": "Update Address",
-          "request": {
-            "method": "PATCH",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"city\": \"Portland\",\n  \"isDefault\": true\n}",
-              "options": { "raw": { "language": "json" } }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/users/me/addresses/{{addressId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["users", "me", "addresses", "{{addressId}}"]
-            }
-          }
-        },
-        {
-          "name": "Delete Address",
-          "request": {
-            "method": "DELETE",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/users/me/addresses/{{addressId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["users", "me", "addresses", "{{addressId}}"]
-            }
-          }
-        },
-        {
-          "name": "Get Cart",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/cart",
-              "host": ["{{baseUrl}}"],
-              "path": ["cart"]
-            }
-          }
-        },
-        {
-          "name": "Add Cart Item",
-          "event": [
+          "name": "Addresses",
+          "description": "Manage shipping and billing addresses.",
+          "item": [
             {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "const res = pm.response.json();",
-                  "if (res && res.data && res.data.items && res.data.items.length) {",
-                  "  pm.collectionVariables.set('cartItemId', res.data.items[res.data.items.length - 1].id);",
-                  "}"
-                ]
+              "name": "List My Addresses",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/users/me/addresses",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["users", "me", "addresses"]
+                }
+              }
+            },
+            {
+              "name": "Create Address",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const res = pm.response.json();",
+                      "if (res && res.data && res.data.id) pm.collectionVariables.set('addressId', res.data.id);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"type\": \"SHIPPING\",\n  \"fullName\": \"Jane Doe\",\n  \"phone\": \"+1 202 555 0199\",\n  \"country\": \"United States\",\n  \"city\": \"Springfield\",\n  \"area\": \"Downtown\",\n  \"street\": \"742 Evergreen Terrace\",\n  \"postalCode\": \"62704\",\n  \"isDefault\": true\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/users/me/addresses",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["users", "me", "addresses"]
+                }
+              }
+            },
+            {
+              "name": "Update Address",
+              "request": {
+                "method": "PATCH",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"city\": \"Portland\",\n  \"isDefault\": true\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/users/me/addresses/{{addressId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["users", "me", "addresses", "{{addressId}}"]
+                }
+              }
+            },
+            {
+              "name": "Delete Address",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/users/me/addresses/{{addressId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["users", "me", "addresses", "{{addressId}}"]
+                }
               }
             }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"productId\": \"{{productId}}\",\n  \"quantity\": 1,\n  \"selectedColor\": \"Black\",\n  \"selectedSize\": \"M\"\n}",
-              "options": { "raw": { "language": "json" } }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/cart/items",
-              "host": ["{{baseUrl}}"],
-              "path": ["cart", "items"]
-            }
-          }
+          ]
         },
         {
-          "name": "Update Cart Item",
-          "request": {
-            "method": "PATCH",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"quantity\": 3\n}",
-              "options": { "raw": { "language": "json" } }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/cart/items/{{cartItemId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["cart", "items", "{{cartItemId}}"]
-            }
-          }
-        },
-        {
-          "name": "Remove Cart Item",
-          "request": {
-            "method": "DELETE",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/cart/items/{{cartItemId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["cart", "items", "{{cartItemId}}"]
-            }
-          }
-        },
-        {
-          "name": "Clear Cart",
-          "request": {
-            "method": "DELETE",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/cart",
-              "host": ["{{baseUrl}}"],
-              "path": ["cart"]
-            }
-          }
-        },
-        {
-          "name": "Get Wishlist",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/wishlist",
-              "host": ["{{baseUrl}}"],
-              "path": ["wishlist"]
-            }
-          }
-        },
-        {
-          "name": "Add to Wishlist",
-          "request": {
-            "method": "POST",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/wishlist/{{productId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["wishlist", "{{productId}}"]
-            }
-          }
-        },
-        {
-          "name": "Remove from Wishlist",
-          "request": {
-            "method": "DELETE",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/wishlist/{{productId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["wishlist", "{{productId}}"]
-            }
-          }
-        },
-        {
-          "name": "Create Product Review",
-          "event": [
+          "name": "Cart",
+          "description": "Shopping cart operations.",
+          "item": [
             {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "const res = pm.response.json();",
-                  "if (res && res.data && res.data.id) pm.collectionVariables.set('reviewId', res.data.id);"
-                ]
+              "name": "Get Cart",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/cart",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["cart"]
+                }
+              }
+            },
+            {
+              "name": "Add Cart Item",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const res = pm.response.json();",
+                      "if (res && res.data && res.data.items && res.data.items.length) {",
+                      "  pm.collectionVariables.set('cartItemId', res.data.items[res.data.items.length - 1].id);",
+                      "}"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"productId\": \"{{productId}}\",\n  \"quantity\": 1,\n  \"selectedColor\": \"Black\",\n  \"selectedSize\": \"M\"\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/cart/items",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["cart", "items"]
+                }
+              }
+            },
+            {
+              "name": "Update Cart Item",
+              "request": {
+                "method": "PATCH",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"quantity\": 3\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/cart/items/{{cartItemId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["cart", "items", "{{cartItemId}}"]
+                }
+              }
+            },
+            {
+              "name": "Remove Cart Item",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/cart/items/{{cartItemId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["cart", "items", "{{cartItemId}}"]
+                }
+              }
+            },
+            {
+              "name": "Clear Cart",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/cart",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["cart"]
+                }
               }
             }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"rating\": 5,\n  \"comment\": \"Excellent product, highly recommended!\"\n}",
-              "options": { "raw": { "language": "json" } }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/products/{{productId}}/reviews",
-              "host": ["{{baseUrl}}"],
-              "path": ["products", "{{productId}}", "reviews"]
-            }
-          }
+          ]
         },
         {
-          "name": "Update My Review",
-          "request": {
-            "method": "PATCH",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"rating\": 4,\n  \"comment\": \"Updated my thoughts after a week of use.\"\n}",
-              "options": { "raw": { "language": "json" } }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/reviews/{{reviewId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["reviews", "{{reviewId}}"]
-            }
-          }
-        },
-        {
-          "name": "Delete My Review",
-          "request": {
-            "method": "DELETE",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/reviews/{{reviewId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["reviews", "{{reviewId}}"]
-            }
-          }
-        },
-        {
-          "name": "Checkout",
-          "event": [
+          "name": "Wishlist",
+          "description": "Saved products.",
+          "item": [
             {
-              "listen": "test",
-              "script": {
-                "type": "text/javascript",
-                "exec": [
-                  "const res = pm.response.json();",
-                  "if (res && res.data && res.data.id) pm.collectionVariables.set('orderId', res.data.id);"
-                ]
+              "name": "Get Wishlist",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/wishlist",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["wishlist"]
+                }
+              }
+            },
+            {
+              "name": "Add to Wishlist",
+              "request": {
+                "method": "POST",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/wishlist/{{productId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["wishlist", "{{productId}}"]
+                }
+              }
+            },
+            {
+              "name": "Remove from Wishlist",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/wishlist/{{productId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["wishlist", "{{productId}}"]
+                }
               }
             }
-          ],
-          "request": {
-            "method": "POST",
-            "header": [{ "key": "Content-Type", "value": "application/json" }],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"paymentMethod\": \"COD\",\n  \"shipping\": {\n    \"fullName\": \"Jane Doe\",\n    \"phone\": \"+1 202 555 0199\",\n    \"country\": \"United States\",\n    \"city\": \"Springfield\",\n    \"street\": \"742 Evergreen Terrace\",\n    \"postalCode\": \"62704\"\n  }\n}",
-              "options": { "raw": { "language": "json" } }
+          ]
+        },
+        {
+          "name": "Reviews",
+          "description": "Write and manage your product reviews.",
+          "item": [
+            {
+              "name": "Create Product Review",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const res = pm.response.json();",
+                      "if (res && res.data && res.data.id) pm.collectionVariables.set('reviewId', res.data.id);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"rating\": 5,\n  \"comment\": \"Excellent product, highly recommended!\"\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/products/{{productId}}/reviews",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["products", "{{productId}}", "reviews"]
+                }
+              }
             },
-            "url": {
-              "raw": "{{baseUrl}}/orders/checkout",
-              "host": ["{{baseUrl}}"],
-              "path": ["orders", "checkout"]
+            {
+              "name": "Update My Review",
+              "request": {
+                "method": "PATCH",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"rating\": 4,\n  \"comment\": \"Updated my thoughts after a week of use.\"\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/reviews/{{reviewId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["reviews", "{{reviewId}}"]
+                }
+              }
+            },
+            {
+              "name": "Delete My Review",
+              "request": {
+                "method": "DELETE",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/reviews/{{reviewId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["reviews", "{{reviewId}}"]
+                }
+              }
             }
-          }
+          ]
         },
         {
-          "name": "My Orders",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/orders/my-orders?page=1&limit=20",
-              "host": ["{{baseUrl}}"],
-              "path": ["orders", "my-orders"],
-              "query": [
-                { "key": "page", "value": "1" },
-                { "key": "limit", "value": "20" },
-                { "key": "status", "value": "", "disabled": true }
-              ]
+          "name": "Orders",
+          "description": "Checkout and view your orders.",
+          "item": [
+            {
+              "name": "Checkout",
+              "event": [
+                {
+                  "listen": "test",
+                  "script": {
+                    "type": "text/javascript",
+                    "exec": [
+                      "const res = pm.response.json();",
+                      "if (res && res.data && res.data.id) pm.collectionVariables.set('orderId', res.data.id);"
+                    ]
+                  }
+                }
+              ],
+              "request": {
+                "method": "POST",
+                "header": [{ "key": "Content-Type", "value": "application/json" }],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"paymentMethod\": \"COD\",\n  \"shipping\": {\n    \"fullName\": \"Jane Doe\",\n    \"phone\": \"+1 202 555 0199\",\n    \"country\": \"United States\",\n    \"city\": \"Springfield\",\n    \"street\": \"742 Evergreen Terrace\",\n    \"postalCode\": \"62704\"\n  }\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "url": {
+                  "raw": "{{baseUrl}}/orders/checkout",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["orders", "checkout"]
+                }
+              }
+            },
+            {
+              "name": "My Orders",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/orders/my-orders?page=1&limit=20",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["orders", "my-orders"],
+                  "query": [
+                    { "key": "page", "value": "1" },
+                    { "key": "limit", "value": "20" },
+                    { "key": "status", "value": "", "disabled": true }
+                  ]
+                }
+              }
+            },
+            {
+              "name": "Get My Order by Id",
+              "request": {
+                "method": "GET",
+                "header": [],
+                "url": {
+                  "raw": "{{baseUrl}}/orders/{{orderId}}",
+                  "host": ["{{baseUrl}}"],
+                  "path": ["orders", "{{orderId}}"]
+                }
+              }
             }
-          }
-        },
-        {
-          "name": "Get My Order by Id",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/orders/{{orderId}}",
-              "host": ["{{baseUrl}}"],
-              "path": ["orders", "{{orderId}}"]
-            }
-          }
+          ]
         }
       ]
     },
