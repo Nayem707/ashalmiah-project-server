@@ -16,7 +16,14 @@ export const createSlideSchema = z.object({
     title: z.string().min(1).max(200),
     subtitle: z.string().max(300).optional(),
     description: z.string().max(1000).optional(),
-    image: z.string().url(),
+    image: z
+      .string()
+      .min(1)
+      .refine(
+        (value) =>
+          /^https?:\/\//i.test(value) || value.startsWith('/uploads/') || value.startsWith('/image/'),
+        'Must be a valid URL or upload path',
+      ),
     buttonText: z.string().max(60).optional(),
     buttonUrl: z.string().max(300).optional(),
     active: z.boolean().optional(),
@@ -30,7 +37,15 @@ export const updateSlideSchema = z.object({
     title: z.string().min(1).max(200).optional(),
     subtitle: z.string().max(300).optional(),
     description: z.string().max(1000).optional(),
-    image: z.string().url().optional(),
+    image: z
+      .string()
+      .min(1)
+      .refine(
+        (value) =>
+          /^https?:\/\//i.test(value) || value.startsWith('/uploads/') || value.startsWith('/image/'),
+        'Must be a valid URL or upload path',
+      )
+      .optional(),
     buttonText: z.string().max(60).optional(),
     buttonUrl: z.string().max(300).optional(),
     active: z.boolean().optional(),
