@@ -3,6 +3,10 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../../config/prisma';
 import { ApiError } from '../../utils/apiError';
 import { buildMeta } from '../../utils/pagination';
+import {
+  deleteLocalUpload,
+  extractUploadKey,
+} from '../uploads/uploads.utils';
 
 const productInclude = {
   category: { select: { id: true, name: true, slug: true } },
@@ -314,6 +318,16 @@ export const productsService = {
       },
       include: productInclude,
     });
+
+    if (data.images) {
+      const next = new Set(data.images);
+      for (const image of existing.images || []) {
+        if (!next.has(image)) {
+          deleteLocalUpload(extractUploadKey(image));
+        }
+      }
+    }
+
     return shape(product);
   },
 
@@ -326,6 +340,10 @@ export const productsService = {
       await tx.orderItem.updateMany({ where: { productId: id }, data: { productId: null } });
       await tx.product.delete({ where: { id } });
     });
+
+    for (const image of existing.images || []) {
+      deleteLocalUpload(extractUploadKey(image));
+    }
 
     return { message: 'Product deleted' };
   },
