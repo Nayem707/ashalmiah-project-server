@@ -10,6 +10,31 @@ type ServiceAccountCreds = {
   privateKey: string;
 };
 
+function normalizePrivateKey(raw: string): string {
+  let key = raw.trim();
+  // Coolify/Docker often wraps values in quotes.
+  if (
+    (key.startsWith('"') && key.endsWith('"')) ||
+    (key.startsWith("'") && key.endsWith("'"))
+  ) {
+    key = key.slice(1, -1);
+  }
+  // Env files usually store newlines as literal \n.
+  return key.replace(/\\n/g, '\n');
+}
+
+function loadServiceAccountFromEnv(): ServiceAccountCreds | null {
+  const projectId = env.firebase.projectId;
+  const clientEmail = env.firebase.clientEmail;
+  const privateKey = env.firebase.privateKey
+    ? normalizePrivateKey(env.firebase.privateKey)
+    : undefined;
+
+  if (!projectId || !clientEmail || !privateKey) return null;
+
+  return { projectId, clientEmail, privateKey };
+}
+
 function loadServiceAccountFromFile(): ServiceAccountCreds | null {
   const rawPath = env.firebase.serviceAccountPath;
   if (!rawPath) return null;
@@ -19,7 +44,8 @@ function loadServiceAccountFromFile(): ServiceAccountCreds | null {
     : path.resolve(process.cwd(), rawPath);
 
   if (!fs.existsSync(resolved)) {
-    throw new Error(`Firebase service account file not found: ${resolved}`);
+    console.warn(`[firebase] Service account file not found: ${resolved}`);
+    return null;
   }
 
   const json = JSON.parse(fs.readFileSync(resolved, 'utf8')) as {
@@ -29,34 +55,20 @@ function loadServiceAccountFromFile(): ServiceAccountCreds | null {
   };
 
   if (!json.project_id || !json.client_email || !json.private_key) {
-    throw new Error('Firebase service account JSON is missing required fields');
+    console.warn('[firebase] Service account JSON is missing required fields');
+    return null;
   }
 
   return {
     projectId: json.project_id,
     clientEmail: json.client_email,
-    privateKey: json.private_key,
+    privateKey: normalizePrivateKey(json.private_key),
   };
 }
 
 function resolveServiceAccount(): ServiceAccountCreds | null {
-  try {
-    const fromFile = loadServiceAccountFromFile();
-    if (fromFile) return fromFile;
-  } catch (error) {
-    console.error('[firebase]', error instanceof Error ? error.message : error);
-    return null;
-  }
-
-  if (env.firebase.projectId && env.firebase.clientEmail && env.firebase.privateKey) {
-    return {
-      projectId: env.firebase.projectId,
-      clientEmail: env.firebase.clientEmail,
-      privateKey: env.firebase.privateKey,
-    };
-  }
-
-  return null;
+  // Prefer env vars in production (Coolify/Docker); fall back to local JSON file.
+  return loadServiceAccountFromEnv() || loadServiceAccountFromFile();
 }
 
 export function isFirebaseAdminConfigured(): boolean {
@@ -66,7 +78,9 @@ export function isFirebaseAdminConfigured(): boolean {
 function getFirebaseApp(): App {
   const credentials = resolveServiceAccount();
   if (!credentials) {
-    throw new Error('Firebase Admin is not configured');
+    throw new Error(
+      'Firebase Admin is not configured. Set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, and FIREBASE_PRIVATE_KEY on the server.',
+    );
   }
 
   const existing = getApps();
