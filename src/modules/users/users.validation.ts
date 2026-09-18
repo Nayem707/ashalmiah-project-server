@@ -3,8 +3,10 @@ import { z } from 'zod';
 export const updateProfileSchema = z.object({
   body: z.object({
     name: z.string().min(2).max(100).optional(),
-    phone: z.string().max(30).optional(),
-    avatarUrl: z.string().url().optional(),
+    phone: z.string().max(30).optional().or(z.literal('')),
+    avatarUrl: z
+      .union([z.string().url(), z.literal(''), z.null()])
+      .optional(),
   }),
 });
 

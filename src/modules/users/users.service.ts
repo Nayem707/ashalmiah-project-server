@@ -28,8 +28,17 @@ export const usersService = {
     return { ...toPublicUser(user), addresses: user.addresses };
   },
 
-  async updateProfile(userId: string, data: { name?: string; phone?: string; avatarUrl?: string }) {
-    const user = await prisma.user.update({ where: { id: userId }, data });
+  async updateProfile(
+    userId: string,
+    data: { name?: string; phone?: string; avatarUrl?: string | null },
+  ) {
+    const payload: { name?: string; phone?: string | null; avatarUrl?: string | null } = {};
+    if (data.name !== undefined) payload.name = data.name;
+    if (data.phone !== undefined) payload.phone = data.phone || null;
+    if (data.avatarUrl !== undefined) {
+      payload.avatarUrl = data.avatarUrl ? data.avatarUrl : null;
+    }
+    const user = await prisma.user.update({ where: { id: userId }, data: payload });
     return toPublicUser(user);
   },
 

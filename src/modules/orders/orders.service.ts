@@ -6,6 +6,22 @@ import { buildMeta } from '../../utils/pagination';
 const SHIPPING_FLAT_RATE = 12;
 const FREE_SHIPPING_THRESHOLD = 150;
 
+const orderItemInclude = {
+  product: { select: { id: true, images: true } },
+} satisfies Prisma.OrderItemInclude;
+
+const orderInclude = {
+  items: { include: orderItemInclude },
+} satisfies Prisma.OrderInclude;
+
+const orderAdminInclude = {
+  items: { include: orderItemInclude },
+  user: { select: { id: true, name: true, email: true } },
+} satisfies Prisma.OrderInclude;
+
+type OrderWithItems = Prisma.OrderGetPayload<{ include: typeof orderInclude }>;
+type OrderWithItemsAdmin = Prisma.OrderGetPayload<{ include: typeof orderAdminInclude }>;
+
 interface CheckoutItemInput {
   productId: string;
   quantity: number;
@@ -29,6 +45,29 @@ function round(n: number) {
 function generateOrderNumber(): string {
   const rand = Math.floor(10000 + Math.random() * 89999);
   return `ORD-${rand}`;
+}
+
+function resolveItemImage(item: {
+  product?: { images?: string[] } | null;
+}): string | null {
+  return item.product?.images?.[0] ?? null;
+}
+
+function shapeOrderItem<T extends { product?: { images?: string[] } | null }>(item: T) {
+  const { product, ...rest } = item;
+  return {
+    ...rest,
+    image: resolveItemImage({ product }),
+  };
+}
+
+function shapeOrder<T extends { items: Array<{ product?: { images?: string[] } | null }> }>(
+  order: T,
+) {
+  return {
+    ...order,
+    items: order.items.map(shapeOrderItem),
+  };
 }
 
 async function resolveItems(
@@ -133,7 +172,7 @@ export const ordersService = {
           shipPostalCode: input.shipping.postalCode,
           items: { create: orderItemsData },
         },
-        include: { items: true },
+        include: orderInclude,
       });
 
       for (const item of orderItemsData) {
@@ -166,11 +205,14 @@ export const ordersService = {
         skip: params.skip,
         take: params.limit,
         orderBy: { createdAt: 'desc' },
-        include: { items: true },
+        include: orderInclude,
       }),
       prisma.order.count({ where }),
     ]);
-    return { items, meta: buildMeta(params.page, params.limit, total) };
+    return {
+      items: (items as OrderWithItems[]).map(shapeOrder),
+      meta: buildMeta(params.page, params.limit, total),
+    };
   },
 
   async listAll(params: {
@@ -198,32 +240,36 @@ export const ordersService = {
         skip: params.skip,
         take: params.limit,
         orderBy: { createdAt: 'desc' },
-        include: { items: true, user: { select: { id: true, name: true, email: true } } },
+        include: orderAdminInclude,
       }),
       prisma.order.count({ where }),
     ]);
-    return { items, meta: buildMeta(params.page, params.limit, total) };
+    return {
+      items: (items as OrderWithItemsAdmin[]).map(shapeOrder),
+      meta: buildMeta(params.page, params.limit, total),
+    };
   },
 
   async getById(id: string, userId: string, isAdmin: boolean) {
     const order = await prisma.order.findUnique({
       where: { id },
-      include: { items: true, user: { select: { id: true, name: true, email: true } } },
+      include: orderAdminInclude,
     });
     if (!order) throw ApiError.notFound('Order not found');
     if (!isAdmin && order.userId !== userId) {
       throw ApiError.forbidden('You cannot access this order');
     }
-    return order;
+    return shapeOrder(order);
   },
 
   async updateStatus(id: string, status: OrderStatus, paymentStatus?: PaymentStatus) {
     const order = await prisma.order.findUnique({ where: { id } });
     if (!order) throw ApiError.notFound('Order not found');
-    return prisma.order.update({
+    const updated = await prisma.order.update({
       where: { id },
       data: { status, ...(paymentStatus ? { paymentStatus } : {}) },
-      include: { items: true },
+      include: orderInclude,
     });
+    return shapeOrder(updated);
   },
 };
