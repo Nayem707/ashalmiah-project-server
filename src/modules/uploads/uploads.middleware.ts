@@ -5,7 +5,9 @@ import multer from 'multer';
 import { env } from '../../config/env';
 import { ApiError } from '../../utils/apiError';
 
-const uploadRoot = path.resolve(process.cwd(), env.upload.dir);
+/** Absolute filesystem directory where Multer writes files. */
+const uploadRoot = env.upload.dir;
+
 if (!fs.existsSync(uploadRoot)) {
   fs.mkdirSync(uploadRoot, { recursive: true });
 }

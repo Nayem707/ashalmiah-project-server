@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import path from 'path';
 
 function required(key: string, fallback?: string): string {
   const value = process.env[key] ?? fallback;
@@ -6,6 +7,23 @@ function required(key: string, fallback?: string): string {
     throw new Error(`Missing required environment variable: ${key}`);
   }
   return value;
+}
+
+/** Normalize a public URL path to `/uploads` form (no trailing slash). */
+function normalizePublicPath(raw: string): string {
+  const trimmed = String(raw || '/uploads').trim() || '/uploads';
+  const withSlash = trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+  return withSlash.replace(/\/+$/, '') || '/uploads';
+}
+
+/**
+ * Resolve the physical upload directory.
+ * - Absolute paths (e.g. `/uploads`) are used as-is (Coolify volume).
+ * - Relative paths (e.g. `uploads`) resolve against process.cwd() (local `server/uploads`).
+ */
+function resolveUploadDir(raw: string): string {
+  const value = String(raw || 'uploads').trim() || 'uploads';
+  return path.isAbsolute(value) ? value : path.resolve(process.cwd(), value);
 }
 
 export const env = {
@@ -29,7 +47,10 @@ export const env = {
     .filter(Boolean),
 
   upload: {
-    dir: process.env.UPLOAD_DIR ?? 'uploads',
+    /** Physical disk directory for Multer (absolute or relative to cwd). */
+    dir: resolveUploadDir(process.env.UPLOAD_DIR ?? 'uploads'),
+    /** Public URL path prefix always served/stored as `/uploads/...`. */
+    publicPath: normalizePublicPath(process.env.UPLOAD_PUBLIC_PATH ?? '/uploads'),
     maxSizeMb: Number(process.env.MAX_UPLOAD_SIZE_MB ?? 5),
   },
 

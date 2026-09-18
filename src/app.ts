@@ -1,4 +1,3 @@
-import path from 'path';
 import express, { Application } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -32,8 +31,10 @@ export function createApp(): Application {
     app.use(morgan('dev'));
   }
 
-  // Serve uploaded files statically.
-  app.use(`/${env.upload.dir}`, express.static(path.resolve(process.cwd(), env.upload.dir)));
+  // Serve uploaded files from the physical upload root at the public URL path.
+  // Disk: env.upload.dir (e.g. ./uploads or /uploads)
+  // URL:  env.upload.publicPath (always /uploads)
+  app.use(env.upload.publicPath, express.static(env.upload.dir));
 
   app.use(env.apiPrefix, apiLimiter, apiRoutes);
 
