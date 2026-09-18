@@ -17,6 +17,8 @@ export const wishlistService = {
             images: true,
             rating: true,
             stock: true,
+            colors: { include: { color: true } },
+            sizes: { include: { size: true } },
           },
         },
       },
@@ -31,6 +33,8 @@ export const wishlistService = {
       image: i.product.images[0] ?? null,
       rating: i.product.rating,
       stock: i.product.stock,
+      colors: i.product.colors.map((c) => c.color.name),
+      sizes: i.product.sizes.map((s) => s.size.name),
       createdAt: i.createdAt,
     }));
   },
