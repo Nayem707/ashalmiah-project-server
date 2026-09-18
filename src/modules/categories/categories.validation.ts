@@ -1,8 +1,17 @@
 import { z } from 'zod';
 
-const optionalImage = z
-  .union([z.string().url(), z.literal(''), z.null()])
-  .optional();
+const imageRef = z
+  .string()
+  .min(1)
+  .refine(
+    (value) =>
+      /^https?:\/\//i.test(value) ||
+      value.startsWith('/uploads/') ||
+      value.startsWith('/image/'),
+    { message: 'Must be a valid URL or upload path' },
+  );
+
+const optionalImage = z.union([imageRef, z.literal(''), z.null()]).optional();
 
 export const idParamSchema = z.object({
   params: z.object({ id: z.string().min(1) }),
