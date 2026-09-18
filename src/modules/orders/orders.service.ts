@@ -32,18 +32,11 @@ function generateOrderNumber(): string {
 }
 
 async function resolveItems(
-  userId: string,
+  _userId: string,
   provided?: CheckoutItemInput[],
 ): Promise<CheckoutItemInput[]> {
-  if (provided?.length) return provided;
-  const cart = await prisma.cart.findUnique({ where: { userId }, include: { items: true } });
-  if (!cart || cart.items.length === 0) throw ApiError.badRequest('Cart is empty');
-  return cart.items.map((i) => ({
-    productId: i.productId,
-    quantity: i.quantity,
-    selectedColor: i.selectedColor ?? undefined,
-    selectedSize: i.selectedSize ?? undefined,
-  }));
+  if (!provided?.length) throw ApiError.badRequest('Cart is empty');
+  return provided;
 }
 
 export const ordersService = {
@@ -57,7 +50,13 @@ export const ordersService = {
   ) {
     const items = await resolveItems(userId, input.items);
     const productIds = items.map((i) => i.productId);
-    const products = await prisma.product.findMany({ where: { id: { in: productIds } } });
+    const products = await prisma.product.findMany({
+      where: { id: { in: productIds } },
+      include: {
+        colors: { include: { color: true } },
+        sizes: { include: { size: true } },
+      },
+    });
     const productMap = new Map(products.map((p) => [p.id, p]));
 
     // Validate availability and compute totals server-side.
@@ -71,6 +70,28 @@ export const ordersService = {
       if (product.stock < item.quantity) {
         throw ApiError.badRequest(`Insufficient stock for ${product.name}`);
       }
+
+      const availableColors = product.colors.map((c) => c.color.name);
+      const availableSizes = product.sizes.map((s) => s.size.name);
+
+      if (availableColors.length > 0) {
+        if (!item.selectedColor) {
+          throw ApiError.badRequest(`Color is required for ${product.name}`);
+        }
+        if (!availableColors.includes(item.selectedColor)) {
+          throw ApiError.badRequest(`Invalid color for ${product.name}`);
+        }
+      }
+
+      if (availableSizes.length > 0) {
+        if (!item.selectedSize) {
+          throw ApiError.badRequest(`Size is required for ${product.name}`);
+        }
+        if (!availableSizes.includes(item.selectedSize)) {
+          throw ApiError.badRequest(`Invalid size for ${product.name}`);
+        }
+      }
+
       const basePrice = Number(product.price);
       const unitPrice = round(basePrice * (1 - product.discount / 100));
       const lineSubtotal = round(unitPrice * item.quantity);

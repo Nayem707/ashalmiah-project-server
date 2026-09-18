@@ -2,7 +2,6 @@ import { z } from 'zod';
 
 export const checkoutSchema = z.object({
   body: z.object({
-    // If items are omitted, the user's cart is used.
     items: z
       .array(
         z.object({
@@ -12,7 +11,7 @@ export const checkoutSchema = z.object({
           selectedSize: z.string().optional(),
         }),
       )
-      .optional(),
+      .min(1, "Cart is empty"),
     paymentMethod: z.enum(['COD', 'ONLINE']).optional(),
     shipping: z.object({
       fullName: z.string().min(2),
