@@ -1,19 +1,32 @@
 import rateLimit from 'express-rate-limit';
+import { RequestHandler } from 'express';
 import { env } from '../config/env';
 
-export const apiLimiter = rateLimit({
-  windowMs: env.rateLimit.windowMs,
-  max: env.rateLimit.max,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { success: false, error: { message: 'Too many requests, please try again later.' } },
-});
+const passthrough: RequestHandler = (_req, _res, next) => next();
+
+// In development, skip the global limiter so local UI work / hot reload
+// does not trip 429s. Production keeps the configured window/max.
+export const apiLimiter: RequestHandler = env.isProduction
+  ? rateLimit({
+      windowMs: env.rateLimit.windowMs,
+      max: env.rateLimit.max,
+      standardHeaders: true,
+      legacyHeaders: false,
+      message: {
+        success: false,
+        error: { message: 'Too many requests, please try again later.' },
+      },
+    })
+  : passthrough;
 
 // Stricter limiter for authentication endpoints to slow brute-force attempts.
 export const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 20,
+  max: env.isProduction ? 20 : 200,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { success: false, error: { message: 'Too many attempts, please try again later.' } },
+  message: {
+    success: false,
+    error: { message: 'Too many attempts, please try again later.' },
+  },
 });

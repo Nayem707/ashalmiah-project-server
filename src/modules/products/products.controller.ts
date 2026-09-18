@@ -66,7 +66,10 @@ export const productsController = {
   }),
 
   getOne: asyncHandler(async (req: Request, res: Response) => {
-    return sendSuccess(res, await productsService.getByIdOrSlug(req.params.idOrSlug));
+    return sendSuccess(
+      res,
+      await productsService.getByIdOrSlug(req.params.idOrSlug, req.user?.role === 'ADMIN'),
+    );
   }),
 
   create: asyncHandler(async (req: Request, res: Response) => {

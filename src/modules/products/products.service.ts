@@ -32,7 +32,9 @@ function shape(p: ProductWithRelations) {
     newArrival: p.newArrival,
     images: p.images,
     colors: p.colors.map((c) => c.color.name),
+    colorIds: p.colors.map((c) => c.color.id),
     sizes: p.sizes.map((s) => s.size.name),
+    sizeIds: p.sizes.map((s) => s.size.id),
     createdAt: p.createdAt,
     updatedAt: p.updatedAt,
   };
@@ -67,6 +69,26 @@ interface ListParams {
   inStock?: boolean;
   sort?: 'featured' | 'newest' | 'price-asc' | 'price-desc' | 'rating';
   isAdmin?: boolean;
+}
+
+async function assertUniqueSku(sku: string, ignoreId?: string) {
+  const existing = await prisma.product.findUnique({ where: { sku } });
+  if (existing && existing.id !== ignoreId) {
+    throw ApiError.conflict('A product with this SKU already exists');
+  }
+}
+
+async function assertAttributeIds(colorIds?: string[], sizeIds?: string[]) {
+  if (colorIds?.length) {
+    const uniqueIds = [...new Set(colorIds)];
+    const count = await prisma.color.count({ where: { id: { in: uniqueIds } } });
+    if (count !== uniqueIds.length) throw ApiError.badRequest('One or more colorIds are invalid');
+  }
+  if (sizeIds?.length) {
+    const uniqueIds = [...new Set(sizeIds)];
+    const count = await prisma.size.count({ where: { id: { in: uniqueIds } } });
+    if (count !== uniqueIds.length) throw ApiError.badRequest('One or more sizeIds are invalid');
+  }
 }
 
 function buildOrderBy(sort?: ListParams['sort']): Prisma.ProductOrderByWithRelationInput {
@@ -163,12 +185,15 @@ export const productsService = {
     };
   },
 
-  async getByIdOrSlug(idOrSlug: string) {
+  async getByIdOrSlug(idOrSlug: string, isAdmin = false) {
     const product = await prisma.product.findFirst({
       where: { OR: [{ id: idOrSlug }, { slug: idOrSlug }] },
       include: productInclude,
     });
     if (!product) throw ApiError.notFound('Product not found');
+    if (!isAdmin && product.status !== 'ACTIVE') {
+      throw ApiError.notFound('Product not found');
+    }
     return shape(product);
   },
 
@@ -200,6 +225,9 @@ export const productsService = {
   }) {
     const category = await prisma.category.findUnique({ where: { id: data.categoryId } });
     if (!category) throw ApiError.badRequest('Invalid categoryId');
+
+    await assertUniqueSku(data.sku);
+    await assertAttributeIds(data.colorIds, data.sizeIds);
 
     const slug = await uniqueSlug(data.name);
     const product = await prisma.product.create({
@@ -256,6 +284,9 @@ export const productsService = {
       if (!category) throw ApiError.badRequest('Invalid categoryId');
     }
 
+    if (data.sku) await assertUniqueSku(data.sku, id);
+    await assertAttributeIds(data.colorIds, data.sizeIds);
+
     const slug = data.name ? await uniqueSlug(data.name, id) : undefined;
 
     const product = await prisma.product.update({
@@ -289,7 +320,13 @@ export const productsService = {
   async remove(id: string) {
     const existing = await prisma.product.findUnique({ where: { id } });
     if (!existing) throw ApiError.notFound('Product not found');
-    await prisma.product.delete({ where: { id } });
+
+    await prisma.$transaction(async (tx) => {
+      // Keep historical order lines; just detach the catalog record.
+      await tx.orderItem.updateMany({ where: { productId: id }, data: { productId: null } });
+      await tx.product.delete({ where: { id } });
+    });
+
     return { message: 'Product deleted' };
   },
 };

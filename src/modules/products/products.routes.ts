@@ -23,7 +23,7 @@ router.get('/new-arrivals', productsController.newArrivals);
 router.get('/:id/reviews', reviewsController.listForProduct);
 router.post('/:id/reviews', authenticate, validate(createReviewSchema), reviewsController.create);
 
-router.get('/:idOrSlug', validate(idOrSlugParamSchema), productsController.getOne);
+router.get('/:idOrSlug', optionalAuth, validate(idOrSlugParamSchema), productsController.getOne);
 
 router.post(
   '/',

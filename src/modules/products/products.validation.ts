@@ -27,21 +27,28 @@ export const idParamSchema = z.object({
   params: z.object({ id: z.string().min(1) }),
 });
 
+const imageRef = z
+  .string()
+  .min(1)
+  .refine((value) => /^https?:\/\//i.test(value) || value.startsWith('/'), {
+    message: 'Must be a valid URL or upload path',
+  });
+
 const productBody = {
   name: z.string().min(2).max(200),
   sku: z.string().min(1).max(60),
   categoryId: z.string().min(1),
   description: z.string().max(4000).optional(),
-  price: z.number().positive(),
-  discount: z.number().int().min(0).max(100).optional(),
-  stock: z.number().int().min(0).optional(),
+  price: z.coerce.number().positive(),
+  discount: z.coerce.number().int().min(0).max(100).optional(),
+  stock: z.coerce.number().int().min(0).optional(),
   status: z.enum(['ACTIVE', 'DRAFT', 'ARCHIVED']).optional(),
   featured: z.boolean().optional(),
   popular: z.boolean().optional(),
   newArrival: z.boolean().optional(),
-  images: z.array(z.string().url()).optional(),
-  colorIds: z.array(z.string()).optional(),
-  sizeIds: z.array(z.string()).optional(),
+  images: z.array(imageRef).optional(),
+  colorIds: z.array(z.string().min(1)).optional(),
+  sizeIds: z.array(z.string().min(1)).optional(),
 };
 
 export const createProductSchema = z.object({
