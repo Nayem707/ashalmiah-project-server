@@ -18,6 +18,7 @@ function toPublicUser(user: User) {
     role: user.role,
     status: user.status,
     authProvider: user.authProvider,
+    isGoogleVerified: user.authProvider === 'GOOGLE' || Boolean(user.firebaseUid),
     avatarUrl: user.avatarUrl,
     phone: user.phone,
     lastLoginAt: user.lastLoginAt,
