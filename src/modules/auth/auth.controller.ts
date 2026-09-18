@@ -14,6 +14,11 @@ export const authController = {
     return sendSuccess(res, result);
   }),
 
+  google: asyncHandler(async (req: Request, res: Response) => {
+    const result = await authService.loginWithGoogle(req.body.idToken);
+    return sendSuccess(res, result);
+  }),
+
   refresh: asyncHandler(async (req: Request, res: Response) => {
     const result = await authService.refresh(req.body.refreshToken);
     return sendSuccess(res, result);

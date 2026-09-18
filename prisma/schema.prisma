@@ -66,22 +66,29 @@ enum ReviewStatus {
   HIDDEN
 }
 
+enum AuthProvider {
+  LOCAL
+  GOOGLE
+}
+
 // ----------------------------------------------------------------------------
 // Identity & users
 // ----------------------------------------------------------------------------
 
 model User {
-  id           String     @id @default(cuid())
+  id           String       @id @default(cuid())
   name         String
-  email        String     @unique
-  passwordHash String
-  role         Role       @default(USER)
-  status       UserStatus @default(ACTIVE)
+  email        String       @unique
+  passwordHash String?
+  role         Role         @default(USER)
+  status       UserStatus   @default(ACTIVE)
+  authProvider AuthProvider @default(LOCAL)
+  firebaseUid  String?      @unique
   avatarUrl    String?
   phone        String?
   lastLoginAt  DateTime?
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
 
   addresses     Address[]
   orders        Order[]

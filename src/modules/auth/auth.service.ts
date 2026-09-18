@@ -5,6 +5,7 @@ import { ApiError } from '../../utils/apiError';
 import { comparePassword, hashPassword } from '../../utils/password';
 import { signAccessToken, signRefreshToken, verifyRefreshToken } from '../../utils/jwt';
 import { env } from '../../config/env';
+import { isFirebaseAdminConfigured, verifyFirebaseIdToken } from '../../config/firebase';
 
 function toPublicUser(user: User) {
   return {
@@ -13,6 +14,7 @@ function toPublicUser(user: User) {
     email: user.email,
     role: user.role,
     status: user.status,
+    authProvider: user.authProvider,
     avatarUrl: user.avatarUrl,
     phone: user.phone,
     createdAt: user.createdAt,
@@ -62,6 +64,7 @@ export const authService = {
         name: input.name,
         email: input.email,
         passwordHash,
+        authProvider: 'LOCAL',
         phone: input.phone,
       },
     });
@@ -77,11 +80,99 @@ export const authService = {
     if (user.status === 'INACTIVE') {
       throw ApiError.forbidden('Account is inactive');
     }
+    if (!user.passwordHash) {
+      throw ApiError.unauthorized(
+        'This account uses Google sign-in. Please continue with Google.',
+      );
+    }
     const valid = await comparePassword(input.password, user.passwordHash);
     if (!valid) {
       throw ApiError.unauthorized('Invalid email or password');
     }
     await prisma.user.update({ where: { id: user.id }, data: { lastLoginAt: new Date() } });
+    const tokens = await issueTokens(user);
+    return { user: toPublicUser(user), ...tokens };
+  },
+
+  /**
+   * Google Sign-In via Firebase:
+   * verify ID token → find/link/create DB user → issue existing app JWTs.
+   */
+  async loginWithGoogle(idToken: string) {
+    if (!isFirebaseAdminConfigured()) {
+      throw ApiError.badRequest('Google sign-in is not configured on the server');
+    }
+
+    let decoded;
+    try {
+      decoded = await verifyFirebaseIdToken(idToken);
+    } catch {
+      throw ApiError.unauthorized('Invalid Google credential');
+    }
+
+    const firebaseUid = decoded.uid;
+    const email = decoded.email?.toLowerCase();
+    if (!email) {
+      throw ApiError.badRequest('Google account email is required');
+    }
+
+    const name =
+      (typeof decoded.name === 'string' && decoded.name.trim()) ||
+      email.split('@')[0] ||
+      'Google User';
+    const picture = typeof decoded.picture === 'string' ? decoded.picture : undefined;
+
+    let user = await prisma.user.findUnique({ where: { firebaseUid } });
+
+    if (!user) {
+      user = await prisma.user.findUnique({ where: { email } });
+
+      if (user) {
+        // Link Google to the existing account; preserve role, password, orders, etc.
+        if (user.firebaseUid && user.firebaseUid !== firebaseUid) {
+          throw ApiError.conflict('This email is already linked to another Google account');
+        }
+        user = await prisma.user.update({
+          where: { id: user.id },
+          data: {
+            firebaseUid,
+            // Keep LOCAL if they already have a password; otherwise mark GOOGLE.
+            authProvider: user.passwordHash ? user.authProvider : 'GOOGLE',
+            avatarUrl: user.avatarUrl || picture || null,
+            lastLoginAt: new Date(),
+          },
+        });
+      } else {
+        user = await prisma.user.create({
+          data: {
+            name,
+            email,
+            passwordHash: null,
+            authProvider: 'GOOGLE',
+            firebaseUid,
+            avatarUrl: picture || null,
+            role: 'USER',
+            lastLoginAt: new Date(),
+          },
+        });
+      }
+    } else {
+      if (user.status === 'INACTIVE') {
+        throw ApiError.forbidden('Account is inactive');
+      }
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          lastLoginAt: new Date(),
+          avatarUrl: user.avatarUrl || picture || null,
+        },
+      });
+    }
+
+    if (user.status === 'INACTIVE') {
+      throw ApiError.forbidden('Account is inactive');
+    }
+
     const tokens = await issueTokens(user);
     return { user: toPublicUser(user), ...tokens };
   },

@@ -58,4 +58,16 @@ export const env = {
     windowMs: Number(process.env.RATE_LIMIT_WINDOW_MS ?? 15 * 60 * 1000),
     max: Number(process.env.RATE_LIMIT_MAX ?? 300),
   },
+
+  /** Firebase Admin (optional — required only for Google sign-in). */
+  firebase: {
+    projectId: process.env.FIREBASE_PROJECT_ID?.trim() || undefined,
+    clientEmail: process.env.FIREBASE_CLIENT_EMAIL?.trim() || undefined,
+    /** Private key may be quoted and use `\n` escapes in .env files. */
+    privateKey: process.env.FIREBASE_PRIVATE_KEY
+      ? process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n').replace(/^"|"$/g, '')
+      : undefined,
+    /** Absolute or server-cwd-relative path to a service account JSON file. */
+    serviceAccountPath: process.env.FIREBASE_SERVICE_ACCOUNT_PATH?.trim() || undefined,
+  },
 };

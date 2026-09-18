@@ -16,6 +16,12 @@ export const loginSchema = z.object({
   }),
 });
 
+export const googleAuthSchema = z.object({
+  body: z.object({
+    idToken: z.string().min(20),
+  }),
+});
+
 export const refreshSchema = z.object({
   body: z.object({
     refreshToken: z.string().min(10),

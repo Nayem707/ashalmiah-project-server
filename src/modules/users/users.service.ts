@@ -17,6 +17,7 @@ function toPublicUser(user: User) {
     email: user.email,
     role: user.role,
     status: user.status,
+    authProvider: user.authProvider,
     avatarUrl: user.avatarUrl,
     phone: user.phone,
     lastLoginAt: user.lastLoginAt,
@@ -101,6 +102,11 @@ export const usersService = {
   async changePassword(userId: string, currentPassword: string, newPassword: string) {
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw ApiError.notFound('User not found');
+    if (!user.passwordHash) {
+      throw ApiError.badRequest(
+        'This account uses Google sign-in and has no password to change',
+      );
+    }
     const valid = await comparePassword(currentPassword, user.passwordHash);
     if (!valid) throw ApiError.badRequest('Current password is incorrect');
     await prisma.user.update({
