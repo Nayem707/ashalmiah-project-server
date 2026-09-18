@@ -263,13 +263,33 @@ export const ordersService = {
   },
 
   async updateStatus(id: string, status: OrderStatus, paymentStatus?: PaymentStatus) {
-    const order = await prisma.order.findUnique({ where: { id } });
-    if (!order) throw ApiError.notFound('Order not found');
-    const updated = await prisma.order.update({
+    const order = await prisma.order.findUnique({
       where: { id },
-      data: { status, ...(paymentStatus ? { paymentStatus } : {}) },
-      include: orderInclude,
+      include: { items: true },
     });
+    if (!order) throw ApiError.notFound('Order not found');
+
+    const becomingCancelled =
+      status === OrderStatus.CANCELLED && order.status !== OrderStatus.CANCELLED;
+
+    const updated = await prisma.$transaction(async (tx) => {
+      if (becomingCancelled) {
+        for (const item of order.items) {
+          if (!item.productId) continue;
+          await tx.product.update({
+            where: { id: item.productId },
+            data: { stock: { increment: item.quantity } },
+          });
+        }
+      }
+
+      return tx.order.update({
+        where: { id },
+        data: { status, ...(paymentStatus ? { paymentStatus } : {}) },
+        include: orderAdminInclude,
+      });
+    });
+
     return shapeOrder(updated);
   },
 };
