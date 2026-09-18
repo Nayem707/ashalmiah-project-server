@@ -15,7 +15,13 @@ export function createApp(): Application {
 
   app.set('trust proxy', 1);
 
-  app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
+  app.use(
+    helmet({
+      crossOriginResourcePolicy: { policy: 'cross-origin' },
+      // Allow Firebase Google popup/redirect opener checks on same-site deploys.
+      crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },
+    }),
+  );
   app.use(
     cors({
       origin: env.corsOrigins,
