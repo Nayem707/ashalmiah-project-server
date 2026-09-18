@@ -63,9 +63,13 @@ export const env = {
   firebase: {
     projectId: process.env.FIREBASE_PROJECT_ID?.trim() || undefined,
     clientEmail: process.env.FIREBASE_CLIENT_EMAIL?.trim() || undefined,
-    /** Prefer raw env value; newline normalization happens in firebase.ts. */
+    /** Optional fallback when not using a service-account JSON file. */
     privateKey: process.env.FIREBASE_PRIVATE_KEY?.trim() || undefined,
-    /** Absolute or server-cwd-relative path to a service account JSON file. */
+    /**
+     * Preferred production method: path to the Firebase service-account JSON.
+     * Absolute, or relative to process.cwd() (e.g. Coolify app root).
+     * FIREBASE_PRIVATE_KEY is not required when this file loads successfully.
+     */
     serviceAccountPath: process.env.FIREBASE_SERVICE_ACCOUNT_PATH?.trim() || undefined,
   },
 };

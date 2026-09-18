@@ -10,17 +10,19 @@ type ServiceAccountCreds = {
   privateKey: string;
 };
 
-function normalizePrivateKey(raw: string): string {
-  let key = raw.trim();
-  // Coolify/Docker often wraps values in quotes.
+function stripWrappingQuotes(value: string): string {
+  const trimmed = value.trim();
   if (
-    (key.startsWith('"') && key.endsWith('"')) ||
-    (key.startsWith("'") && key.endsWith("'"))
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
   ) {
-    key = key.slice(1, -1);
+    return trimmed.slice(1, -1);
   }
-  // Env files usually store newlines as literal \n.
-  return key.replace(/\\n/g, '\n');
+  return trimmed;
+}
+
+function normalizePrivateKey(raw: string): string {
+  return stripWrappingQuotes(raw).replace(/\\n/g, '\n');
 }
 
 function loadServiceAccountFromEnv(): ServiceAccountCreds | null {
@@ -30,45 +32,85 @@ function loadServiceAccountFromEnv(): ServiceAccountCreds | null {
     ? normalizePrivateKey(env.firebase.privateKey)
     : undefined;
 
+  // Env-credential method requires all three values. Missing private key is OK
+  // when a service-account JSON file is configured instead.
   if (!projectId || !clientEmail || !privateKey) return null;
 
   return { projectId, clientEmail, privateKey };
+}
+
+/**
+ * Resolve FIREBASE_SERVICE_ACCOUNT_PATH to an existing file.
+ * Relative paths are resolved from process.cwd() (Coolify/Docker app root).
+ */
+function resolveServiceAccountFilePath(rawPath: string): string | null {
+  const cleaned = stripWrappingQuotes(rawPath);
+  if (!cleaned) return null;
+
+  const candidates = new Set<string>();
+
+  if (path.isAbsolute(cleaned)) {
+    candidates.add(cleaned);
+  } else {
+    candidates.add(path.resolve(process.cwd(), cleaned));
+    // Common Coolify layouts: repo root vs server/ subdirectory as cwd.
+    candidates.add(path.resolve(process.cwd(), 'server', cleaned));
+    candidates.add(path.resolve(process.cwd(), path.basename(cleaned)));
+  }
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
+      return candidate;
+    }
+  }
+
+  console.warn(
+    `[firebase] Service account file not found for FIREBASE_SERVICE_ACCOUNT_PATH="${cleaned}". Tried: ${[
+      ...candidates,
+    ].join(', ')}`,
+  );
+  return null;
 }
 
 function loadServiceAccountFromFile(): ServiceAccountCreds | null {
   const rawPath = env.firebase.serviceAccountPath;
   if (!rawPath) return null;
 
-  const resolved = path.isAbsolute(rawPath)
-    ? rawPath
-    : path.resolve(process.cwd(), rawPath);
+  const resolved = resolveServiceAccountFilePath(rawPath);
+  if (!resolved) return null;
 
-  if (!fs.existsSync(resolved)) {
-    console.warn(`[firebase] Service account file not found: ${resolved}`);
+  try {
+    const json = JSON.parse(fs.readFileSync(resolved, 'utf8')) as {
+      project_id?: string;
+      client_email?: string;
+      private_key?: string;
+    };
+
+    if (!json.project_id || !json.client_email || !json.private_key) {
+      console.warn(
+        '[firebase] Service account JSON is missing project_id, client_email, or private_key',
+      );
+      return null;
+    }
+
+    return {
+      projectId: json.project_id,
+      clientEmail: json.client_email,
+      privateKey: normalizePrivateKey(json.private_key),
+    };
+  } catch (error) {
+    console.warn(
+      '[firebase] Failed to read service account JSON:',
+      error instanceof Error ? error.message : 'unknown error',
+    );
     return null;
   }
-
-  const json = JSON.parse(fs.readFileSync(resolved, 'utf8')) as {
-    project_id?: string;
-    client_email?: string;
-    private_key?: string;
-  };
-
-  if (!json.project_id || !json.client_email || !json.private_key) {
-    console.warn('[firebase] Service account JSON is missing required fields');
-    return null;
-  }
-
-  return {
-    projectId: json.project_id,
-    clientEmail: json.client_email,
-    privateKey: normalizePrivateKey(json.private_key),
-  };
 }
 
 function resolveServiceAccount(): ServiceAccountCreds | null {
-  // Prefer env vars in production (Coolify/Docker); fall back to local JSON file.
-  return loadServiceAccountFromEnv() || loadServiceAccountFromFile();
+  // Prefer JSON file when FIREBASE_SERVICE_ACCOUNT_PATH is set (production method).
+  // Env vars (including FIREBASE_PRIVATE_KEY) remain an optional fallback.
+  return loadServiceAccountFromFile() || loadServiceAccountFromEnv();
 }
 
 export function isFirebaseAdminConfigured(): boolean {
@@ -79,7 +121,7 @@ function getFirebaseApp(): App {
   const credentials = resolveServiceAccount();
   if (!credentials) {
     throw new Error(
-      'Firebase Admin is not configured. Set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, and FIREBASE_PRIVATE_KEY on the server.',
+      'Firebase Admin is not configured. Provide either FIREBASE_SERVICE_ACCOUNT_PATH to a valid service-account JSON file, or FIREBASE_PROJECT_ID + FIREBASE_CLIENT_EMAIL + FIREBASE_PRIVATE_KEY.',
     );
   }
 

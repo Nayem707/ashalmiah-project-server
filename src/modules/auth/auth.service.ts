@@ -101,7 +101,9 @@ export const authService = {
    */
   async loginWithGoogle(idToken: string) {
     if (!isFirebaseAdminConfigured()) {
-      throw ApiError.badRequest('Google sign-in is not configured on the server');
+      throw ApiError.badRequest(
+        'Google sign-in is not configured on the server. Set FIREBASE_SERVICE_ACCOUNT_PATH to a valid service-account JSON file, or set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, and FIREBASE_PRIVATE_KEY.',
+      );
     }
 
     let decoded;
