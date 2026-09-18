@@ -2,6 +2,10 @@ import slugify from 'slugify';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../config/prisma';
 import { ApiError } from '../../utils/apiError';
+import {
+  deleteLocalUpload,
+  extractUploadKey,
+} from '../uploads/uploads.utils';
 
 async function uniqueSlug(name: string, ignoreId?: string): Promise<string> {
   const base = slugify(name, { lower: true, strict: true });
@@ -38,29 +42,62 @@ export const categoriesService = {
   async create(data: {
     name: string;
     description?: string;
-    image?: string;
+    image?: string | null;
     status?: 'ACTIVE' | 'INACTIVE';
   }) {
     const slug = await uniqueSlug(data.name);
-    return prisma.category.create({ data: { ...data, slug } });
+    return prisma.category.create({
+      data: {
+        ...data,
+        image: data.image ? data.image : null,
+        slug,
+      },
+    });
   },
 
   async update(
     id: string,
-    data: { name?: string; description?: string; image?: string; status?: 'ACTIVE' | 'INACTIVE' },
+    data: {
+      name?: string;
+      description?: string;
+      image?: string | null;
+      status?: 'ACTIVE' | 'INACTIVE';
+    },
   ) {
     const existing = await prisma.category.findUnique({ where: { id } });
     if (!existing) throw ApiError.notFound('Category not found');
     const slug = data.name ? await uniqueSlug(data.name, id) : undefined;
-    return prisma.category.update({ where: { id }, data: { ...data, ...(slug ? { slug } : {}) } });
+    const payload = {
+      ...data,
+      ...(data.image !== undefined ? { image: data.image || null } : {}),
+      ...(slug ? { slug } : {}),
+    };
+    const updated = await prisma.category.update({
+      where: { id },
+      data: payload,
+    });
+
+    // Remove previous local upload when the image URL is replaced or cleared.
+    if (
+      data.image !== undefined &&
+      existing.image &&
+      existing.image !== updated.image
+    ) {
+      deleteLocalUpload(extractUploadKey(existing.image));
+    }
+
+    return updated;
   },
 
   async remove(id: string) {
+    const existing = await prisma.category.findUnique({ where: { id } });
+    if (!existing) throw ApiError.notFound('Category not found');
     const count = await prisma.product.count({ where: { categoryId: id } });
     if (count > 0) {
       throw ApiError.conflict('Cannot delete a category that still has products');
     }
     await prisma.category.delete({ where: { id } });
+    deleteLocalUpload(extractUploadKey(existing.image));
     return { message: 'Category deleted' };
   },
 };
