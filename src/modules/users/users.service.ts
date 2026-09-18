@@ -1,8 +1,14 @@
 import { Prisma, User } from '@prisma/client';
+import { Request } from 'express';
 import { prisma } from '../../config/prisma';
 import { ApiError } from '../../utils/apiError';
 import { comparePassword, hashPassword } from '../../utils/password';
 import { buildMeta } from '../../utils/pagination';
+import {
+  deleteLocalUpload,
+  extractUploadKey,
+  publicUploadUrl,
+} from '../uploads/uploads.utils';
 
 function toPublicUser(user: User) {
   return {
@@ -16,6 +22,10 @@ function toPublicUser(user: User) {
     lastLoginAt: user.lastLoginAt,
     createdAt: user.createdAt,
   };
+}
+
+function removeOwnedLocalAvatar(avatarUrl: string | null | undefined) {
+  deleteLocalUpload(extractUploadKey(avatarUrl));
 }
 
 export const usersService = {
@@ -32,13 +42,59 @@ export const usersService = {
     userId: string,
     data: { name?: string; phone?: string; avatarUrl?: string | null },
   ) {
+    const current = await prisma.user.findUnique({ where: { id: userId } });
+    if (!current) throw ApiError.notFound('User not found');
+
     const payload: { name?: string; phone?: string | null; avatarUrl?: string | null } = {};
     if (data.name !== undefined) payload.name = data.name;
     if (data.phone !== undefined) payload.phone = data.phone || null;
     if (data.avatarUrl !== undefined) {
       payload.avatarUrl = data.avatarUrl ? data.avatarUrl : null;
     }
+
     const user = await prisma.user.update({ where: { id: userId }, data: payload });
+
+    // If avatar was cleared or replaced with a non-local URL, remove previous local file.
+    if (
+      data.avatarUrl !== undefined &&
+      current.avatarUrl &&
+      current.avatarUrl !== user.avatarUrl
+    ) {
+      removeOwnedLocalAvatar(current.avatarUrl);
+    }
+
+    return toPublicUser(user);
+  },
+
+  async updateAvatar(userId: string, req: Request, file?: Express.Multer.File) {
+    if (!file) throw ApiError.badRequest('No image file uploaded');
+
+    const current = await prisma.user.findUnique({ where: { id: userId } });
+    if (!current) throw ApiError.notFound('User not found');
+
+    const avatarUrl = publicUploadUrl(req, file.filename);
+    const user = await prisma.user.update({
+      where: { id: userId },
+      data: { avatarUrl },
+    });
+
+    if (current.avatarUrl && current.avatarUrl !== avatarUrl) {
+      removeOwnedLocalAvatar(current.avatarUrl);
+    }
+
+    return toPublicUser(user);
+  },
+
+  async removeAvatar(userId: string) {
+    const current = await prisma.user.findUnique({ where: { id: userId } });
+    if (!current) throw ApiError.notFound('User not found');
+
+    const user = await prisma.user.update({
+      where: { id: userId },
+      data: { avatarUrl: null },
+    });
+
+    removeOwnedLocalAvatar(current.avatarUrl);
     return toPublicUser(user);
   },
 

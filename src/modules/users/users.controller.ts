@@ -13,6 +13,21 @@ export const usersController = {
     return sendSuccess(res, await usersService.updateProfile(req.user!.sub, req.body));
   }),
 
+  uploadAvatar: asyncHandler(async (req: Request, res: Response) => {
+    return sendSuccess(
+      res,
+      await usersService.updateAvatar(
+        req.user!.sub,
+        req,
+        req.file as Express.Multer.File | undefined,
+      ),
+    );
+  }),
+
+  removeAvatar: asyncHandler(async (req: Request, res: Response) => {
+    return sendSuccess(res, await usersService.removeAvatar(req.user!.sub));
+  }),
+
   changePassword: asyncHandler(async (req: Request, res: Response) => {
     const { currentPassword, newPassword } = req.body;
     return sendSuccess(

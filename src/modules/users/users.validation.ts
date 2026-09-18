@@ -49,3 +49,22 @@ export const addressSchema = z.object({
     isDefault: z.boolean().optional(),
   }),
 });
+
+export const updateAddressSchema = z.object({
+  params: z.object({ id: z.string().min(1) }),
+  body: z
+    .object({
+      type: z.enum(['SHIPPING', 'BILLING']).optional(),
+      fullName: z.string().min(2).optional(),
+      phone: z.string().min(3).optional(),
+      country: z.string().min(1).optional(),
+      city: z.string().min(1).optional(),
+      area: z.string().optional().nullable(),
+      street: z.string().min(1).optional(),
+      postalCode: z.string().optional().nullable(),
+      isDefault: z.boolean().optional(),
+    })
+    .refine((body) => Object.keys(body).length > 0, {
+      message: 'At least one field is required',
+    }),
+});

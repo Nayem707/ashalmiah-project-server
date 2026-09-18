@@ -37,7 +37,16 @@ export function errorHandler(
       message = 'Database request error';
     }
   } else if (err instanceof Error) {
-    message = err.message;
+    // Multer file filter / size limit errors
+    if ((err as { code?: string }).code === 'LIMIT_FILE_SIZE') {
+      statusCode = 400;
+      message = `Image exceeds the ${env.upload.maxSizeMb}MB size limit`;
+    } else if (err.message === 'Only image files are allowed') {
+      statusCode = 400;
+      message = err.message;
+    } else {
+      message = err.message;
+    }
   }
 
   if (statusCode >= 500) {

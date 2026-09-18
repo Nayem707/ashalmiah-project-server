@@ -2,11 +2,13 @@ import { Router } from 'express';
 import { usersController } from './users.controller';
 import { validate } from '../../middleware/validate';
 import { authenticate, authorize } from '../../middleware/auth';
+import { uploadMiddleware } from '../uploads/uploads.middleware';
 import {
   addressSchema,
   changePasswordSchema,
   idParamSchema,
   listUsersSchema,
+  updateAddressSchema,
   updateProfileSchema,
   updateStatusSchema,
 } from './users.validation';
@@ -22,6 +24,13 @@ router.patch(
   validate(changePasswordSchema),
   usersController.changePassword,
 );
+router.post(
+  '/me/avatar',
+  authenticate,
+  uploadMiddleware.single('avatar'),
+  usersController.uploadAvatar,
+);
+router.delete('/me/avatar', authenticate, usersController.removeAvatar);
 
 // Addresses
 router.get('/me/addresses', authenticate, usersController.listAddresses);
@@ -29,7 +38,7 @@ router.post('/me/addresses', authenticate, validate(addressSchema), usersControl
 router.patch(
   '/me/addresses/:id',
   authenticate,
-  validate(idParamSchema),
+  validate(updateAddressSchema),
   usersController.updateAddress,
 );
 router.delete(

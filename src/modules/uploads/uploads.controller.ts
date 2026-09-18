@@ -4,18 +4,17 @@ import { Request, Response } from 'express';
 import { asyncHandler } from '../../utils/asyncHandler';
 import { sendCreated, sendSuccess } from '../../utils/apiResponse';
 import { ApiError } from '../../utils/apiError';
-import { env } from '../../config/env';
 import { uploadRoot } from './uploads.middleware';
-
-function publicUrl(req: Request, filename: string) {
-  return `${req.protocol}://${req.get('host')}/${env.upload.dir}/${filename}`;
-}
+import { publicUploadUrl } from './uploads.utils';
 
 export const uploadsController = {
   uploadImages: asyncHandler(async (req: Request, res: Response) => {
     const files = (req.files as Express.Multer.File[] | undefined) ?? [];
     if (files.length === 0) throw ApiError.badRequest('No files uploaded');
-    const data = files.map((f) => ({ key: f.filename, url: publicUrl(req, f.filename) }));
+    const data = files.map((f) => ({
+      key: f.filename,
+      url: publicUploadUrl(req, f.filename),
+    }));
     return sendCreated(res, data);
   }),
 
