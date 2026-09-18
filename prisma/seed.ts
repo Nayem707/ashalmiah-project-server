@@ -967,11 +967,31 @@ async function main() {
     { sectionKey: 'popular', title: 'Popular right now', sortOrder: 5 },
     { sectionKey: 'newArrivals', title: 'New arrivals', sortOrder: 6 },
     { sectionKey: 'promo', title: 'Seasonal promotion', sortOrder: 7 },
+    {
+      sectionKey: 'firstVisitPopup',
+      title: 'First visit popup',
+      sortOrder: 8,
+      active: true,
+      content: {
+        image: img('1441986300917-64674bd600d8'),
+        buttonText: 'Shop Now',
+        buttonUrl: '/products',
+        alt: 'Welcome promotion',
+      },
+    },
   ];
   for (const s of sections) {
     await prisma.homepageSection.upsert({
       where: { sectionKey: s.sectionKey },
-      update: {},
+      update:
+        s.sectionKey === 'firstVisitPopup'
+          ? {
+              title: s.title,
+              active: s.active ?? true,
+              sortOrder: s.sortOrder,
+              content: s.content,
+            }
+          : {},
       create: s,
     });
   }

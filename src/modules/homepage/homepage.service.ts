@@ -6,7 +6,9 @@ export const homepageService = {
   // Aggregated public payload for rendering the storefront homepage.
   async getPublic() {
     const [sections, slides, featured, popular, newArrivals, categories] = await Promise.all([
-      prisma.homepageSection.findMany({ where: { active: true }, orderBy: { sortOrder: 'asc' } }),
+      // Return all sections (including inactive) so the storefront can honor
+      // per-section `active` flags without falling back to client defaults.
+      prisma.homepageSection.findMany({ orderBy: { sortOrder: 'asc' } }),
       prisma.heroSlide.findMany({ where: { active: true }, orderBy: { sortOrder: 'asc' } }),
       prisma.product.findMany({
         where: { status: 'ACTIVE', featured: true },
