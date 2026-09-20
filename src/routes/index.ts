@@ -11,6 +11,7 @@ import reviewsRoutes from '../modules/reviews/reviews.routes';
 import homepageRoutes from '../modules/homepage/homepage.routes';
 import dashboardRoutes from '../modules/dashboard/dashboard.routes';
 import uploadsRoutes from '../modules/uploads/uploads.routes';
+import settingsRoutes from '../modules/settings/settings.routes';
 
 const router = Router();
 
@@ -30,5 +31,6 @@ router.use('/reviews', reviewsRoutes);
 router.use('/homepage', homepageRoutes);
 router.use('/admin/dashboard', dashboardRoutes);
 router.use('/uploads', uploadsRoutes);
+router.use('/settings', settingsRoutes);
 
 export default router;

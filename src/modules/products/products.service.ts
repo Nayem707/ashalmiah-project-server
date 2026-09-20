@@ -26,6 +26,7 @@ function shape(p: ProductWithRelations) {
     category: p.category?.name,
     description: p.description,
     price: Number(p.price),
+    baseCurrency: p.baseCurrency || 'BDT',
     discount: p.discount,
     stock: p.stock,
     status: p.status,
@@ -217,6 +218,7 @@ export const productsService = {
     categoryId: string;
     description?: string;
     price: number;
+    baseCurrency?: string;
     discount?: number;
     stock?: number;
     status?: 'ACTIVE' | 'DRAFT' | 'ARCHIVED';
@@ -234,6 +236,8 @@ export const productsService = {
     await assertAttributeIds(data.colorIds, data.sizeIds);
 
     const slug = await uniqueSlug(data.name);
+    const baseCurrency =
+      String(data.baseCurrency || 'BDT').toUpperCase() === 'USD' ? 'USD' : 'BDT';
     const product = await prisma.product.create({
       data: {
         name: data.name,
@@ -242,6 +246,7 @@ export const productsService = {
         categoryId: data.categoryId,
         description: data.description,
         price: data.price,
+        baseCurrency,
         discount: data.discount ?? 0,
         stock: data.stock ?? 0,
         status: data.status ?? 'ACTIVE',
@@ -269,6 +274,7 @@ export const productsService = {
       categoryId: string;
       description: string;
       price: number;
+      baseCurrency: string;
       discount: number;
       stock: number;
       status: 'ACTIVE' | 'DRAFT' | 'ARCHIVED';
@@ -292,6 +298,12 @@ export const productsService = {
     await assertAttributeIds(data.colorIds, data.sizeIds);
 
     const slug = data.name ? await uniqueSlug(data.name, id) : undefined;
+    const baseCurrency =
+      data.baseCurrency !== undefined
+        ? String(data.baseCurrency).toUpperCase() === 'USD'
+          ? 'USD'
+          : 'BDT'
+        : undefined;
 
     const product = await prisma.product.update({
       where: { id },
@@ -302,6 +314,7 @@ export const productsService = {
         categoryId: data.categoryId,
         description: data.description,
         price: data.price,
+        ...(baseCurrency ? { baseCurrency } : {}),
         discount: data.discount,
         stock: data.stock,
         status: data.status,

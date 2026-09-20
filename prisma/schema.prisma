@@ -180,6 +180,8 @@ model Product {
   category    Category      @relation(fields: [categoryId], references: [id])
   description String?
   price       Decimal       @db.Decimal(10, 2)
+  /// Currency the stored `price` is denominated in. Never rewritten when display currency changes.
+  baseCurrency String       @default("BDT")
   discount    Int           @default(0) // percentage 0-100
   stock       Int           @default(0)
   status      ProductStatus @default(ACTIVE)
@@ -282,6 +284,8 @@ model Order {
   discount      Decimal       @default(0) @db.Decimal(10, 2)
   shippingFee   Decimal       @default(0) @db.Decimal(10, 2)
   totalAmount   Decimal       @db.Decimal(10, 2)
+  /// Currency of stored order amounts (product base at checkout). Historical rows keep their figures.
+  currency      String        @default("BDT")
   paymentMethod PaymentMethod @default(COD)
   paymentStatus PaymentStatus @default(UNPAID)
 
@@ -369,4 +373,24 @@ model HeroSlide {
   sortOrder   Int      @default(0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+// ----------------------------------------------------------------------------
+// Store settings (display currency + rate; product prices stay in baseCurrency)
+// ----------------------------------------------------------------------------
+
+model AppSettings {
+  id               String   @id @default("default")
+  storeName        String   @default("Shoply")
+  supportEmail     String   @default("support@shoply.com")
+  phone            String   @default("+1 (800) 555-0199")
+  currency         String   @default("USD")
+  /// How many BDT equal 1 USD. Used only for display/cart conversion.
+  bdtPerUsd        Decimal  @default(122) @db.Decimal(12, 4)
+  address          String   @default("123 Market St, San Francisco, CA")
+  /// Shipping amounts are stored in BDT (store base), same as product prices.
+  shippingFlatRate Decimal  @default(12) @db.Decimal(10, 2)
+  freeShippingMin  Decimal  @default(150) @db.Decimal(10, 2)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 }

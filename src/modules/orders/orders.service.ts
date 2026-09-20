@@ -2,9 +2,7 @@ import { OrderStatus, PaymentMethod, PaymentStatus, Prisma } from '@prisma/clien
 import { prisma } from '../../config/prisma';
 import { ApiError } from '../../utils/apiError';
 import { buildMeta } from '../../utils/pagination';
-
-const SHIPPING_FLAT_RATE = 12;
-const FREE_SHIPPING_THRESHOLD = 150;
+import { settingsService } from '../settings/settings.service';
 
 const orderItemInclude = {
   product: { select: { id: true, images: true } },
@@ -61,11 +59,13 @@ function shapeOrderItem<T extends { product?: { images?: string[] } | null }>(it
   };
 }
 
-function shapeOrder<T extends { items: Array<{ product?: { images?: string[] } | null }> }>(
-  order: T,
-) {
+function shapeOrder<T extends {
+  items: Array<{ product?: { images?: string[] } | null }>;
+  currency?: string | null;
+}>(order: T) {
   return {
     ...order,
+    currency: order.currency || 'BDT',
     items: order.items.map(shapeOrderItem),
   };
 }
@@ -148,8 +148,14 @@ export const ordersService = {
     });
 
     const itemsTotal = round(subtotal - discountTotal);
-    const shippingFee = itemsTotal >= FREE_SHIPPING_THRESHOLD ? 0 : SHIPPING_FLAT_RATE;
+    const storeSettings = await settingsService.get();
+    const shippingFee =
+      itemsTotal >= storeSettings.freeShippingMin ? 0 : storeSettings.shippingFlatRate;
     const totalAmount = round(itemsTotal + shippingFee);
+
+    // Orders store amounts in product base currency (unchanged DB prices). Default BDT.
+    const orderCurrency =
+      products[0]?.baseCurrency?.toUpperCase() === 'USD' ? 'USD' : 'BDT';
 
     // Transaction: create order, decrement stock, clear cart.
     const order = await prisma.$transaction(async (tx) => {
@@ -162,6 +168,7 @@ export const ordersService = {
           discount: round(discountTotal),
           shippingFee,
           totalAmount,
+          currency: orderCurrency,
           paymentMethod: (input.paymentMethod as PaymentMethod) ?? PaymentMethod.COD,
           paymentStatus: PaymentStatus.UNPAID,
           shipFullName: input.shipping.fullName,
