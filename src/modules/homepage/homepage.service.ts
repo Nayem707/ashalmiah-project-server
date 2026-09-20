@@ -35,38 +35,91 @@ function normalizePublicSlide(slide: HeroSlideInput, index: number) {
 export const homepageService = {
   // Aggregated public payload for rendering the storefront homepage.
   async getPublic() {
-    const [sections, slides, featured, popular, newArrivals, categories] = await Promise.all([
-      // Return all sections (including inactive) so the storefront can honor
-      // per-section `active` flags without falling back to client defaults.
-      prisma.homepageSection.findMany({ orderBy: { sortOrder: 'asc' } }),
-      prisma.heroSlide.findMany({ where: { active: true }, orderBy: { sortOrder: 'asc' } }),
-      prisma.product.findMany({
-        where: { status: 'ACTIVE', featured: true },
-        take: 8,
-        orderBy: { createdAt: 'desc' },
-      }),
-      prisma.product.findMany({
-        where: { status: 'ACTIVE', popular: true },
-        take: 8,
-        orderBy: { createdAt: 'desc' },
-      }),
-      prisma.product.findMany({
-        where: { status: 'ACTIVE', newArrival: true },
-        take: 8,
-        orderBy: { createdAt: 'desc' },
-      }),
-      prisma.category.findMany({ where: { status: 'ACTIVE' }, orderBy: { name: 'asc' } }),
-    ]);
+    const productSelect = {
+      id: true,
+      name: true,
+      slug: true,
+      price: true,
+      baseCurrency: true,
+      discount: true,
+      rating: true,
+      reviewsCount: true,
+      stock: true,
+      images: true,
+      featured: true,
+      popular: true,
+      newArrival: true,
+      createdAt: true,
+    } as const;
 
-    const mapProduct = (p: (typeof featured)[number]) => ({
+    const [sections, slides, featuredFlagged, popularFlagged, newArrivalFlagged, categories, fallbackPool] =
+      await Promise.all([
+        // Return all sections (including inactive) so the storefront can honor
+        // per-section `active` flags without falling back to client defaults.
+        prisma.homepageSection.findMany({ orderBy: { sortOrder: 'asc' } }),
+        prisma.heroSlide.findMany({ where: { active: true }, orderBy: { sortOrder: 'asc' } }),
+        prisma.product.findMany({
+          where: { status: 'ACTIVE', featured: true },
+          take: 8,
+          orderBy: { createdAt: 'desc' },
+          select: productSelect,
+        }),
+        prisma.product.findMany({
+          where: { status: 'ACTIVE', popular: true },
+          take: 8,
+          orderBy: { createdAt: 'desc' },
+          select: productSelect,
+        }),
+        prisma.product.findMany({
+          where: { status: 'ACTIVE', newArrival: true },
+          take: 8,
+          orderBy: { createdAt: 'desc' },
+          select: productSelect,
+        }),
+        prisma.category.findMany({ where: { status: 'ACTIVE' }, orderBy: { name: 'asc' } }),
+        // Fallback pool when no products are flagged for homepage collections.
+        prisma.product.findMany({
+          where: { status: 'ACTIVE' },
+          take: 24,
+          orderBy: [{ rating: 'desc' }, { createdAt: 'desc' }],
+          select: productSelect,
+        }),
+      ]);
+
+    const mapProduct = (p: (typeof fallbackPool)[number]) => ({
       id: p.id,
       name: p.name,
       slug: p.slug,
       price: Number(p.price),
+      baseCurrency: p.baseCurrency || 'BDT',
       discount: p.discount,
       rating: p.rating,
+      reviews: p.reviewsCount,
+      stock: p.stock,
+      images: p.images,
       image: p.images[0] ?? null,
+      featured: p.featured,
+      popular: p.popular,
+      newArrival: p.newArrival,
     });
+
+    const featuredSource =
+      featuredFlagged.length > 0 ? featuredFlagged : fallbackPool.slice(0, 8);
+    const popularSource =
+      popularFlagged.length > 0
+        ? popularFlagged
+        : fallbackPool.slice(0, 8).length
+          ? [...fallbackPool].sort((a, b) => b.rating - a.rating).slice(0, 8)
+          : [];
+    const newArrivalSource =
+      newArrivalFlagged.length > 0
+        ? newArrivalFlagged
+        : [...fallbackPool]
+            .sort(
+              (a, b) =>
+                new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+            )
+            .slice(0, 8);
 
     const heroSection = sections.find((section) => section.sectionKey === 'hero');
     const content = (heroSection?.content ?? null) as { slides?: unknown } | null;
@@ -98,9 +151,9 @@ export const homepageService = {
       sections,
       heroSlides,
       categories,
-      featured: featured.map(mapProduct),
-      popular: popular.map(mapProduct),
-      newArrivals: newArrivals.map(mapProduct),
+      featured: featuredSource.map(mapProduct),
+      popular: popularSource.map(mapProduct),
+      newArrivals: newArrivalSource.map(mapProduct),
     };
   },
 
