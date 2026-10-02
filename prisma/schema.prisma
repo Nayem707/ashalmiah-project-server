@@ -139,6 +139,7 @@ model Address {
 model Category {
   id          String         @id @default(cuid())
   name        String
+  title       String?
   slug        String         @unique
   description String?
   image       String?

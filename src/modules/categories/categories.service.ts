@@ -46,6 +46,7 @@ export const categoriesService = {
 
   async create(data: {
     name: string;
+    title?: string | null;
     description?: string;
     image?: string | null;
     status?: 'ACTIVE' | 'INACTIVE';
@@ -54,6 +55,7 @@ export const categoriesService = {
     return prisma.category.create({
       data: {
         ...data,
+        title: data.title || null,
         image: data.image ? data.image : null,
         slug,
       },
@@ -64,6 +66,7 @@ export const categoriesService = {
     id: string,
     data: {
       name?: string;
+      title?: string | null;
       description?: string;
       image?: string | null;
       status?: 'ACTIVE' | 'INACTIVE';
@@ -74,6 +77,7 @@ export const categoriesService = {
     const slug = data.name ? await uniqueSlug(data.name, id) : undefined;
     const payload = {
       ...data,
+      ...(data.title !== undefined ? { title: data.title || null } : {}),
       ...(data.image !== undefined ? { image: data.image || null } : {}),
       ...(slug ? { slug } : {}),
     };

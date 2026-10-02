@@ -10,7 +10,7 @@ import {
 } from '../uploads/uploads.utils';
 
 const productInclude = {
-  category: { select: { id: true, name: true, slug: true } },
+  category: { select: { id: true, name: true, title: true, slug: true } },
   colors: { include: { color: true } },
   sizes: { include: { size: true } },
 } satisfies Prisma.ProductInclude;
@@ -25,6 +25,8 @@ function shape(p: ProductWithRelations) {
     sku: p.sku,
     categoryId: p.categoryId,
     category: p.category?.name,
+    categoryTitle: p.category?.title || p.category?.name,
+    categorySlug: p.category?.slug,
     description: p.description,
     shortDescription: p.shortDescription ?? [],
     price: Number(p.price),
