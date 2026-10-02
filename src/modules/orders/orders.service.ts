@@ -34,6 +34,7 @@ interface ShippingInput {
   city: string;
   street: string;
   postalCode?: string;
+  deliveryArea?: 'INSIDE_DHAKA' | 'OUTSIDE_DHAKA';
 }
 
 function round(n: number) {
@@ -150,7 +151,9 @@ export const ordersService = {
     const itemsTotal = round(subtotal - discountTotal);
     const storeSettings = await settingsService.get();
     const shippingFee =
-      itemsTotal >= storeSettings.freeShippingMin ? 0 : storeSettings.shippingFlatRate;
+      input.shipping.deliveryArea === 'INSIDE_DHAKA'
+        ? storeSettings.deliveryInsideDhaka
+        : storeSettings.deliveryOutsideDhaka;
     const totalAmount = round(itemsTotal + shippingFee);
 
     // Orders store amounts in product base currency (unchanged DB prices). Default BDT.

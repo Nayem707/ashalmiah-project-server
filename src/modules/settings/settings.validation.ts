@@ -15,5 +15,7 @@ export const updateShippingSettingsSchema = z.object({
   body: z.object({
     shippingFlatRate: z.coerce.number().nonnegative().optional(),
     freeShippingMin: z.coerce.number().nonnegative().optional(),
+    deliveryInsideDhaka: z.coerce.number().nonnegative().optional(),
+    deliveryOutsideDhaka: z.coerce.number().nonnegative().optional(),
   }),
 });

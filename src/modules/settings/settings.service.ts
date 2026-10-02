@@ -18,6 +18,8 @@ function toPublicSettings(row: {
   address: string;
   shippingFlatRate: { toString(): string } | number;
   freeShippingMin: { toString(): string } | number;
+  deliveryInsideDhaka: { toString(): string } | number;
+  deliveryOutsideDhaka: { toString(): string } | number;
 }) {
   return {
     storeName: row.storeName,
@@ -28,6 +30,8 @@ function toPublicSettings(row: {
     address: row.address,
     shippingFlatRate: Number(row.shippingFlatRate),
     freeShippingMin: Number(row.freeShippingMin),
+    deliveryInsideDhaka: Number(row.deliveryInsideDhaka),
+    deliveryOutsideDhaka: Number(row.deliveryOutsideDhaka),
   };
 }
 
@@ -79,7 +83,12 @@ export const settingsService = {
     return toPublicSettings(row);
   },
 
-  async updateShipping(input: { shippingFlatRate?: number; freeShippingMin?: number }) {
+  async updateShipping(input: {
+    shippingFlatRate?: number;
+    freeShippingMin?: number;
+    deliveryInsideDhaka?: number;
+    deliveryOutsideDhaka?: number;
+  }) {
     await ensureSettings();
     const row = await prisma.appSettings.update({
       where: { id: DEFAULT_ID },
@@ -89,6 +98,12 @@ export const settingsService = {
           : {}),
         ...(input.freeShippingMin !== undefined
           ? { freeShippingMin: input.freeShippingMin }
+          : {}),
+        ...(input.deliveryInsideDhaka !== undefined
+          ? { deliveryInsideDhaka: input.deliveryInsideDhaka }
+          : {}),
+        ...(input.deliveryOutsideDhaka !== undefined
+          ? { deliveryOutsideDhaka: input.deliveryOutsideDhaka }
           : {}),
       },
     });

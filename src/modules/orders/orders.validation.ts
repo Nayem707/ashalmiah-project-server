@@ -20,6 +20,7 @@ export const checkoutSchema = z.object({
       city: z.string().min(1),
       street: z.string().min(1),
       postalCode: z.string().optional(),
+      deliveryArea: z.enum(['INSIDE_DHAKA', 'OUTSIDE_DHAKA']).optional(),
     }),
   }),
 });
