@@ -1,8 +1,8 @@
-import slugify from 'slugify';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../config/prisma';
 import { ApiError } from '../../utils/apiError';
 import { buildMeta } from '../../utils/pagination';
+import { toSlug } from '../../utils/slug';
 import {
   deleteLocalUpload,
   extractUploadKey,
@@ -46,7 +46,7 @@ function shape(p: ProductWithRelations) {
 }
 
 async function uniqueSlug(name: string, ignoreId?: string): Promise<string> {
-  const base = slugify(name, { lower: true, strict: true });
+  const base = toSlug(name, 'product');
   let slug = base;
   let n = 1;
   // eslint-disable-next-line no-constant-condition

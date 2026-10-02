@@ -1,14 +1,14 @@
-import slugify from 'slugify';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../config/prisma';
 import { ApiError } from '../../utils/apiError';
+import { toSlug } from '../../utils/slug';
 import {
   deleteLocalUpload,
   extractUploadKey,
 } from '../uploads/uploads.utils';
 
 async function uniqueSlug(name: string, ignoreId?: string): Promise<string> {
-  const base = slugify(name, { lower: true, strict: true });
+  const base = toSlug(name, 'category');
   let slug = base;
   let n = 1;
   // Ensure slug uniqueness across categories.
@@ -26,7 +26,12 @@ export const categoriesService = {
     return prisma.category.findMany({
       where,
       orderBy: { name: 'asc' },
-      include: { _count: { select: { products: true } } },
+      include: {
+        _count: {
+          // Storefront counts must match what the public product list returns.
+          select: { products: includeInactive ? true : { where: { status: 'ACTIVE' } } },
+        },
+      },
     });
   },
 
