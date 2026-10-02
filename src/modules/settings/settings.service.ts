@@ -4,10 +4,20 @@ import {
   DEFAULT_BDT_PER_USD,
   normalizeCurrency,
 } from '../../utils/currency';
+import { SOCIAL_LINK_KEYS } from './settings.validation';
 
 const DEFAULT_ID = 'default';
 
 const ALLOWED_CURRENCIES = new Set(['USD', 'BDT']);
+
+type SocialLinks = Record<(typeof SOCIAL_LINK_KEYS)[number], string>;
+
+function toSocialLinks(value: unknown): SocialLinks {
+  const source = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+  return Object.fromEntries(
+    SOCIAL_LINK_KEYS.map((key) => [key, typeof source[key] === 'string' ? source[key] : '']),
+  ) as SocialLinks;
+}
 
 function toPublicSettings(row: {
   storeName: string;
@@ -20,6 +30,12 @@ function toPublicSettings(row: {
   freeShippingMin: { toString(): string } | number;
   deliveryInsideDhaka: { toString(): string } | number;
   deliveryOutsideDhaka: { toString(): string } | number;
+  whatsapp: string;
+  logoUrl: string;
+  footerDescription: string;
+  supportHours: string;
+  copyrightName: string;
+  socialLinks: unknown;
 }) {
   return {
     storeName: row.storeName,
@@ -32,6 +48,12 @@ function toPublicSettings(row: {
     freeShippingMin: Number(row.freeShippingMin),
     deliveryInsideDhaka: Number(row.deliveryInsideDhaka),
     deliveryOutsideDhaka: Number(row.deliveryOutsideDhaka),
+    whatsapp: row.whatsapp,
+    logoUrl: row.logoUrl,
+    footerDescription: row.footerDescription,
+    supportHours: row.supportHours,
+    copyrightName: row.copyrightName,
+    socialLinks: toSocialLinks(row.socialLinks),
   };
 }
 
@@ -56,8 +78,14 @@ export const settingsService = {
     currency?: string;
     bdtPerUsd?: number;
     address?: string;
+    whatsapp?: string;
+    logoUrl?: string;
+    footerDescription?: string;
+    supportHours?: string;
+    copyrightName?: string;
+    socialLinks?: Partial<SocialLinks>;
   }) {
-    await ensureSettings();
+    const existing = await ensureSettings();
     const currency = input.currency?.toUpperCase();
     if (currency && !ALLOWED_CURRENCIES.has(currency)) {
       throw ApiError.badRequest('Unsupported currency');
@@ -78,6 +106,16 @@ export const settingsService = {
         ...(currency ? { currency: normalizeCurrency(currency) } : {}),
         ...(input.bdtPerUsd !== undefined ? { bdtPerUsd: input.bdtPerUsd } : {}),
         ...(input.address !== undefined ? { address: input.address } : {}),
+        ...(input.whatsapp !== undefined ? { whatsapp: input.whatsapp } : {}),
+        ...(input.logoUrl !== undefined ? { logoUrl: input.logoUrl } : {}),
+        ...(input.footerDescription !== undefined
+          ? { footerDescription: input.footerDescription }
+          : {}),
+        ...(input.supportHours !== undefined ? { supportHours: input.supportHours } : {}),
+        ...(input.copyrightName !== undefined ? { copyrightName: input.copyrightName } : {}),
+        ...(input.socialLinks !== undefined
+          ? { socialLinks: { ...toSocialLinks(existing.socialLinks), ...input.socialLinks } }
+          : {}),
       },
     });
     return toPublicSettings(row);
