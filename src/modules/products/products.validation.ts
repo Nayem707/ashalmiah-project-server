@@ -38,7 +38,7 @@ const productBody = {
   name: z.string().min(2).max(200),
   sku: z.string().min(1).max(60),
   categoryId: z.string().min(1),
-  description: z.string().max(4000).optional(),
+  description: z.string().max(20000).optional(),
   price: z.coerce.number().positive(),
   baseCurrency: z.enum(['USD', 'BDT']).optional(),
   discount: z.coerce.number().int().min(0).max(100).optional(),

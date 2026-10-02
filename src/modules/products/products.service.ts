@@ -3,6 +3,7 @@ import { prisma } from '../../config/prisma';
 import { ApiError } from '../../utils/apiError';
 import { buildMeta } from '../../utils/pagination';
 import { toSlug } from '../../utils/slug';
+import { cleanDescription } from '../../utils/richText';
 import {
   deleteLocalUpload,
   extractUploadKey,
@@ -244,7 +245,7 @@ export const productsService = {
         slug,
         sku: data.sku,
         categoryId: data.categoryId,
-        description: data.description,
+        description: cleanDescription(data.description),
         price: data.price,
         baseCurrency,
         discount: data.discount ?? 0,
@@ -312,7 +313,7 @@ export const productsService = {
         ...(slug ? { slug } : {}),
         sku: data.sku,
         categoryId: data.categoryId,
-        description: data.description,
+        description: cleanDescription(data.description),
         price: data.price,
         ...(baseCurrency ? { baseCurrency } : {}),
         discount: data.discount,
