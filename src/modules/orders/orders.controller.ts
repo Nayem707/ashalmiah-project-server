@@ -34,7 +34,14 @@ export const ordersController = {
   }),
 
   track: asyncHandler(async (req: Request, res: Response) => {
-    return sendSuccess(res, await ordersService.trackByNumber(req.params.orderNumber));
+    return sendSuccess(res, await ordersService.trackByPhone(req.body.phone));
+  }),
+
+  trackDetails: asyncHandler(async (req: Request, res: Response) => {
+    return sendSuccess(
+      res,
+      await ordersService.trackOrderDetails(req.body.phone, req.body.orderNumber),
+    );
   }),
 
   getById: asyncHandler(async (req: Request, res: Response) => {

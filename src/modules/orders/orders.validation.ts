@@ -1,14 +1,29 @@
 import { z } from 'zod';
-import { ORDER_NUMBER_PATTERN, normalizeOrderNumber } from '../../utils/orderNumber';
+import { ORDER_NUMBER_PATTERN } from '../../utils/orderNumber';
+import { normalizeBdMobile } from '../../utils/phone';
+
+const MOBILE_MESSAGE = 'Please enter a valid mobile number, e.g. 01712345678';
+
+const mobileNumber = z.string({ required_error: MOBILE_MESSAGE }).transform((value, ctx) => {
+  const phone = normalizeBdMobile(value);
+  if (!phone) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, message: MOBILE_MESSAGE });
+    return z.NEVER;
+  }
+  return phone;
+});
 
 export const trackOrderSchema = z.object({
-  params: z.object({
+  body: z.object({ phone: mobileNumber }),
+});
+
+export const trackOrderDetailsSchema = z.object({
+  body: z.object({
+    phone: mobileNumber,
     orderNumber: z
-      .string()
-      .transform(normalizeOrderNumber)
-      .refine((value) => ORDER_NUMBER_PATTERN.test(value), {
-        message: 'Please enter a valid order number, e.g. ORD-7K3M9X2QPA',
-      }),
+      .string({ required_error: 'Please select an order' })
+      .transform((value) => value.trim().toUpperCase())
+      .refine((value) => ORDER_NUMBER_PATTERN.test(value), 'Please select a valid order'),
   }),
 });
 
@@ -23,7 +38,7 @@ export const checkoutSchema = z.object({
           selectedSize: z.string().optional(),
         }),
       )
-      .min(1, "Cart is empty"),
+      .min(1, 'Cart is empty'),
     paymentMethod: z.enum(['COD', 'ONLINE']).optional(),
     shipping: z.object({
       fullName: z.string().min(2),

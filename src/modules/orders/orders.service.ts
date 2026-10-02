@@ -3,7 +3,15 @@ import { prisma } from '../../config/prisma';
 import { ApiError } from '../../utils/apiError';
 import { buildMeta } from '../../utils/pagination';
 import { settingsService } from '../settings/settings.service';
-import { generateOrderNumber } from '../../utils/orderNumber';
+import {
+  formatOrderNumber,
+  orderDateKey,
+  orderNumberPrefix,
+  orderSequenceOf,
+} from '../../utils/orderNumber';
+import { normalizeBdMobile } from '../../utils/phone';
+
+const TRACKING_ORDER_LIMIT = 20;
 
 const orderItemInclude = {
   product: { select: { id: true, images: true } },
@@ -42,16 +50,37 @@ function round(n: number) {
   return Math.round(n * 100) / 100;
 }
 
-async function generateUniqueOrderNumber(): Promise<string> {
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    const candidate = generateOrderNumber();
-    const exists = await prisma.order.findUnique({
-      where: { orderNumber: candidate },
-      select: { id: true },
-    });
-    if (!exists) return candidate;
+const ORDER_NUMBER_ATTEMPTS = 3;
+
+/**
+ * Next `#ORD-YYYYMMDD-NNN` for the day of `createdAt`. Must run inside the transaction
+ * that inserts the order: the advisory lock is held until that transaction commits,
+ * so concurrent checkouts for the same day are numbered one after another.
+ */
+async function allocateOrderNumber(tx: Prisma.TransactionClient, createdAt: Date) {
+  const dateKey = orderDateKey(createdAt);
+  const prefix = orderNumberPrefix(dateKey);
+
+  await tx.$queryRaw`SELECT 1 FROM pg_advisory_xact_lock(hashtext(${`order-number:${dateKey}`}))`;
+
+  const [latest] = await tx.$queryRaw<Array<{ orderNumber: string }>>`
+    SELECT "orderNumber" FROM "Order"
+    WHERE "orderNumber" LIKE ${`${prefix}%`}
+    ORDER BY length("orderNumber") DESC, "orderNumber" DESC
+    LIMIT 1
+  `;
+
+  return formatOrderNumber(dateKey, orderSequenceOf(latest?.orderNumber ?? '', dateKey) + 1);
+}
+
+function isOrderNumberConflict(error: unknown) {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== 'P2002') {
+    return false;
   }
-  throw ApiError.internal('Could not generate an order number, please try again');
+  const target = error.meta?.target;
+  return Array.isArray(target)
+    ? target.includes('orderNumber')
+    : String(target).includes('orderNumber');
 }
 
 function maskPhone(phone: string): string {
@@ -74,8 +103,6 @@ const publicTrackingSelect = {
   shipPhone: true,
   shipCountry: true,
   shipCity: true,
-  shipStreet: true,
-  shipPostalCode: true,
   createdAt: true,
   updatedAt: true,
   items: {
@@ -92,9 +119,7 @@ const publicTrackingSelect = {
   },
 } satisfies Prisma.OrderSelect;
 
-function resolveItemImage(item: {
-  product?: { images?: string[] } | null;
-}): string | null {
+function resolveItemImage(item: { product?: { images?: string[] } | null }): string | null {
   return item.product?.images?.[0] ?? null;
 }
 
@@ -106,10 +131,12 @@ function shapeOrderItem<T extends { product?: { images?: string[] } | null }>(it
   };
 }
 
-function shapeOrder<T extends {
-  items: Array<{ product?: { images?: string[] } | null }>;
-  currency?: string | null;
-}>(order: T) {
+function shapeOrder<
+  T extends {
+    items: Array<{ product?: { images?: string[] } | null }>;
+    currency?: string | null;
+  },
+>(order: T) {
   return {
     ...order,
     currency: order.currency || 'BDT',
@@ -203,48 +230,62 @@ export const ordersService = {
     const totalAmount = round(itemsTotal + shippingFee);
 
     // Orders store amounts in product base currency (unchanged DB prices). Default BDT.
-    const orderCurrency =
-      products[0]?.baseCurrency?.toUpperCase() === 'USD' ? 'USD' : 'BDT';
+    const orderCurrency = products[0]?.baseCurrency?.toUpperCase() === 'USD' ? 'USD' : 'BDT';
 
-    const orderNumber = await generateUniqueOrderNumber();
+    // Transaction: number the order, create it, decrement stock, clear cart.
+    const placeOrder = () =>
+      prisma.$transaction(
+        async (tx) => {
+          const createdAt = new Date();
+          const orderNumber = await allocateOrderNumber(tx, createdAt);
 
-    // Transaction: create order, decrement stock, clear cart.
-    const order = await prisma.$transaction(async (tx) => {
-      const created = await tx.order.create({
-        data: {
-          orderNumber,
-          userId,
-          status: OrderStatus.PENDING,
-          subtotal: round(subtotal),
-          discount: round(discountTotal),
-          shippingFee,
-          totalAmount,
-          currency: orderCurrency,
-          paymentMethod: (input.paymentMethod as PaymentMethod) ?? PaymentMethod.COD,
-          paymentStatus: PaymentStatus.UNPAID,
-          shipFullName: input.shipping.fullName,
-          shipPhone: input.shipping.phone,
-          shipCountry: input.shipping.country,
-          shipCity: input.shipping.city,
-          shipStreet: input.shipping.street,
-          shipPostalCode: input.shipping.postalCode,
-          items: { create: orderItemsData },
+          const created = await tx.order.create({
+            data: {
+              orderNumber,
+              createdAt,
+              userId,
+              status: OrderStatus.PENDING,
+              subtotal: round(subtotal),
+              discount: round(discountTotal),
+              shippingFee,
+              totalAmount,
+              currency: orderCurrency,
+              paymentMethod: (input.paymentMethod as PaymentMethod) ?? PaymentMethod.COD,
+              paymentStatus: PaymentStatus.UNPAID,
+              shipFullName: input.shipping.fullName,
+              shipPhone: normalizeBdMobile(input.shipping.phone) ?? input.shipping.phone,
+              shipCountry: input.shipping.country,
+              shipCity: input.shipping.city,
+              shipStreet: input.shipping.street,
+              shipPostalCode: input.shipping.postalCode,
+              items: { create: orderItemsData },
+            },
+            include: orderInclude,
+          });
+
+          for (const item of orderItemsData) {
+            await tx.product.update({
+              where: { id: item.productId },
+              data: { stock: { decrement: item.quantity } },
+            });
+          }
+
+          const cart = await tx.cart.findUnique({ where: { userId } });
+          if (cart) await tx.cartItem.deleteMany({ where: { cartId: cart.id } });
+
+          return created;
         },
-        include: orderInclude,
-      });
+        { maxWait: 10_000, timeout: 20_000 },
+      );
 
-      for (const item of orderItemsData) {
-        await tx.product.update({
-          where: { id: item.productId },
-          data: { stock: { decrement: item.quantity } },
-        });
+    let order: Awaited<ReturnType<typeof placeOrder>> | undefined;
+    for (let attempt = 1; !order; attempt += 1) {
+      try {
+        order = await placeOrder();
+      } catch (error) {
+        if (!isOrderNumberConflict(error) || attempt >= ORDER_NUMBER_ATTEMPTS) throw error;
       }
-
-      const cart = await tx.cart.findUnique({ where: { userId } });
-      if (cart) await tx.cartItem.deleteMany({ where: { cartId: cart.id } });
-
-      return created;
-    });
+    }
 
     return this.getById(order.id, userId, false);
   },
@@ -320,13 +361,32 @@ export const ordersService = {
     return shapeOrder(order);
   },
 
-  /** Public, unauthenticated lookup: returns only what a customer needs to track delivery. */
-  async trackByNumber(orderNumber: string) {
+  /** Public, unauthenticated: order numbers placed with this mobile number (no item details). */
+  async trackByPhone(phone: string) {
+    // Stored phones may contain spaces, dashes or +880, so match on their digits.
+    const matches = await prisma.$queryRaw<
+      Array<{ orderNumber: string; status: OrderStatus; createdAt: Date; shipPhone: string }>
+    >`
+      SELECT "orderNumber", status, "createdAt", "shipPhone" FROM "Order"
+      WHERE right(regexp_replace("shipPhone", '\\D', '', 'g'), 10) = ${phone.slice(1)}
+      ORDER BY "createdAt" DESC
+      LIMIT ${TRACKING_ORDER_LIMIT}
+    `;
+
+    return matches
+      .filter((order) => normalizeBdMobile(order.shipPhone) === phone)
+      .map(({ orderNumber, status, createdAt }) => ({ orderNumber, status, createdAt }));
+  },
+
+  /** Public, unauthenticated: one order's details, only if it was placed with this mobile number. */
+  async trackOrderDetails(phone: string, orderNumber: string) {
     const order = await prisma.order.findUnique({
       where: { orderNumber },
       select: publicTrackingSelect,
     });
-    if (!order) throw ApiError.notFound('No order found with this order number');
+    if (!order || normalizeBdMobile(order.shipPhone) !== phone) {
+      throw ApiError.notFound('No order found for this mobile number');
+    }
     return {
       ...order,
       currency: order.currency || 'BDT',

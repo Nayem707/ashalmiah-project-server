@@ -7,6 +7,7 @@ import {
   checkoutSchema,
   idParamSchema,
   listOrdersSchema,
+  trackOrderDetailsSchema,
   trackOrderSchema,
   updateStatusSchema,
 } from './orders.validation';
@@ -14,11 +15,12 @@ import {
 const router = Router();
 
 // Public (no login): must stay above `router.use(authenticate)`.
-router.get(
-  '/track/:orderNumber',
+router.post('/track', trackOrderLimiter, validate(trackOrderSchema), ordersController.track);
+router.post(
+  '/track/details',
   trackOrderLimiter,
-  validate(trackOrderSchema),
-  ordersController.track,
+  validate(trackOrderDetailsSchema),
+  ordersController.trackDetails,
 );
 
 router.use(authenticate);
