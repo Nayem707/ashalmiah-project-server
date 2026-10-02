@@ -26,6 +26,7 @@ function shape(p: ProductWithRelations) {
     categoryId: p.categoryId,
     category: p.category?.name,
     description: p.description,
+    shortDescription: p.shortDescription ?? [],
     price: Number(p.price),
     baseCurrency: p.baseCurrency || 'BDT',
     discount: p.discount,
@@ -44,6 +45,16 @@ function shape(p: ProductWithRelations) {
     createdAt: p.createdAt,
     updatedAt: p.updatedAt,
   };
+}
+
+const MAX_HIGHLIGHTS = 5;
+
+function cleanHighlights(points?: string[]): string[] | undefined {
+  if (points === undefined) return undefined;
+  return points
+    .map((point) => point.trim())
+    .filter(Boolean)
+    .slice(0, MAX_HIGHLIGHTS);
 }
 
 async function uniqueSlug(name: string, ignoreId?: string): Promise<string> {
@@ -218,6 +229,7 @@ export const productsService = {
     sku: string;
     categoryId: string;
     description?: string;
+    shortDescription?: string[];
     price: number;
     baseCurrency?: string;
     discount?: number;
@@ -246,6 +258,7 @@ export const productsService = {
         sku: data.sku,
         categoryId: data.categoryId,
         description: cleanDescription(data.description),
+        shortDescription: cleanHighlights(data.shortDescription) ?? [],
         price: data.price,
         baseCurrency,
         discount: data.discount ?? 0,
@@ -274,6 +287,7 @@ export const productsService = {
       sku: string;
       categoryId: string;
       description: string;
+      shortDescription: string[];
       price: number;
       baseCurrency: string;
       discount: number;
@@ -314,6 +328,7 @@ export const productsService = {
         sku: data.sku,
         categoryId: data.categoryId,
         description: cleanDescription(data.description),
+        shortDescription: cleanHighlights(data.shortDescription),
         price: data.price,
         ...(baseCurrency ? { baseCurrency } : {}),
         discount: data.discount,

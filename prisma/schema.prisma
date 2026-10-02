@@ -179,6 +179,8 @@ model Product {
   categoryId  String
   category    Category      @relation(fields: [categoryId], references: [id])
   description String?
+  /// Up to 5 highlight bullet points shown above the full description.
+  shortDescription String[] @default([])
   price       Decimal       @db.Decimal(10, 2)
   /// Currency the stored `price` is denominated in. Never rewritten when display currency changes.
   baseCurrency String       @default("BDT")
