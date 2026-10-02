@@ -397,6 +397,14 @@ model AppSettings {
   /// Checkout delivery charges by area (BDT).
   deliveryInsideDhaka  Decimal @default(70) @db.Decimal(10, 2)
   deliveryOutsideDhaka Decimal @default(150) @db.Decimal(10, 2)
+  /// Storefront footer content.
+  whatsapp          String @default("")
+  logoUrl           String @default("")
+  footerDescription String @default("")
+  supportHours      String @default("")
+  copyrightName     String @default("")
+  /// { facebook, instagram, tiktok, youtube, messenger } → URL strings.
+  socialLinks       Json   @default("{}")
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 }
