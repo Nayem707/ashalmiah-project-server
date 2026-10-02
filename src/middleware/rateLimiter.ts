@@ -19,6 +19,18 @@ export const apiLimiter: RequestHandler = env.isProduction
     })
   : passthrough;
 
+// Public order tracking is unauthenticated, so slow down order-number guessing.
+export const trackOrderLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: env.isProduction ? 30 : 300,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: { message: 'Too many tracking attempts, please try again later.' },
+  },
+});
+
 // Stricter limiter for authentication endpoints to slow brute-force attempts.
 export const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,

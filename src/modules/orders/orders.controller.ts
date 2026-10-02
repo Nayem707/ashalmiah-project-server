@@ -33,6 +33,10 @@ export const ordersController = {
     return sendSuccess(res, result.items, 200, result.meta);
   }),
 
+  track: asyncHandler(async (req: Request, res: Response) => {
+    return sendSuccess(res, await ordersService.trackByNumber(req.params.orderNumber));
+  }),
+
   getById: asyncHandler(async (req: Request, res: Response) => {
     const isAdmin = req.user!.role === 'ADMIN';
     return sendSuccess(res, await ordersService.getById(req.params.id, req.user!.sub, isAdmin));

@@ -3,6 +3,7 @@ import { prisma } from '../../config/prisma';
 import { ApiError } from '../../utils/apiError';
 import { buildMeta } from '../../utils/pagination';
 import { settingsService } from '../settings/settings.service';
+import { generateOrderNumber } from '../../utils/orderNumber';
 
 const orderItemInclude = {
   product: { select: { id: true, images: true } },
@@ -41,10 +42,55 @@ function round(n: number) {
   return Math.round(n * 100) / 100;
 }
 
-function generateOrderNumber(): string {
-  const rand = Math.floor(10000 + Math.random() * 89999);
-  return `ORD-${rand}`;
+async function generateUniqueOrderNumber(): Promise<string> {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const candidate = generateOrderNumber();
+    const exists = await prisma.order.findUnique({
+      where: { orderNumber: candidate },
+      select: { id: true },
+    });
+    if (!exists) return candidate;
+  }
+  throw ApiError.internal('Could not generate an order number, please try again');
 }
+
+function maskPhone(phone: string): string {
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length <= 5) return '*'.repeat(digits.length);
+  return `${digits.slice(0, 3)}${'*'.repeat(digits.length - 5)}${digits.slice(-2)}`;
+}
+
+const publicTrackingSelect = {
+  orderNumber: true,
+  status: true,
+  paymentMethod: true,
+  paymentStatus: true,
+  currency: true,
+  subtotal: true,
+  discount: true,
+  shippingFee: true,
+  totalAmount: true,
+  shipFullName: true,
+  shipPhone: true,
+  shipCountry: true,
+  shipCity: true,
+  shipStreet: true,
+  shipPostalCode: true,
+  createdAt: true,
+  updatedAt: true,
+  items: {
+    select: {
+      productId: true,
+      productName: true,
+      quantity: true,
+      unitPrice: true,
+      selectedColor: true,
+      selectedSize: true,
+      subtotal: true,
+      product: { select: { images: true } },
+    },
+  },
+} satisfies Prisma.OrderSelect;
 
 function resolveItemImage(item: {
   product?: { images?: string[] } | null;
@@ -160,11 +206,13 @@ export const ordersService = {
     const orderCurrency =
       products[0]?.baseCurrency?.toUpperCase() === 'USD' ? 'USD' : 'BDT';
 
+    const orderNumber = await generateUniqueOrderNumber();
+
     // Transaction: create order, decrement stock, clear cart.
     const order = await prisma.$transaction(async (tx) => {
       const created = await tx.order.create({
         data: {
-          orderNumber: generateOrderNumber(),
+          orderNumber,
           userId,
           status: OrderStatus.PENDING,
           subtotal: round(subtotal),
@@ -270,6 +318,21 @@ export const ordersService = {
       throw ApiError.forbidden('You cannot access this order');
     }
     return shapeOrder(order);
+  },
+
+  /** Public, unauthenticated lookup: returns only what a customer needs to track delivery. */
+  async trackByNumber(orderNumber: string) {
+    const order = await prisma.order.findUnique({
+      where: { orderNumber },
+      select: publicTrackingSelect,
+    });
+    if (!order) throw ApiError.notFound('No order found with this order number');
+    return {
+      ...order,
+      currency: order.currency || 'BDT',
+      shipPhone: maskPhone(order.shipPhone),
+      items: order.items.map(shapeOrderItem),
+    };
   },
 
   async updateStatus(id: string, status: OrderStatus, paymentStatus?: PaymentStatus) {

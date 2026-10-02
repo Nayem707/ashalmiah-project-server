@@ -2,14 +2,25 @@ import { Router } from 'express';
 import { ordersController } from './orders.controller';
 import { validate } from '../../middleware/validate';
 import { authenticate, authorize } from '../../middleware/auth';
+import { trackOrderLimiter } from '../../middleware/rateLimiter';
 import {
   checkoutSchema,
   idParamSchema,
   listOrdersSchema,
+  trackOrderSchema,
   updateStatusSchema,
 } from './orders.validation';
 
 const router = Router();
+
+// Public (no login): must stay above `router.use(authenticate)`.
+router.get(
+  '/track/:orderNumber',
+  trackOrderLimiter,
+  validate(trackOrderSchema),
+  ordersController.track,
+);
+
 router.use(authenticate);
 
 // Customer

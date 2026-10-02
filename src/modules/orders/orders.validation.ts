@@ -1,4 +1,16 @@
 import { z } from 'zod';
+import { ORDER_NUMBER_PATTERN, normalizeOrderNumber } from '../../utils/orderNumber';
+
+export const trackOrderSchema = z.object({
+  params: z.object({
+    orderNumber: z
+      .string()
+      .transform(normalizeOrderNumber)
+      .refine((value) => ORDER_NUMBER_PATTERN.test(value), {
+        message: 'Please enter a valid order number, e.g. ORD-7K3M9X2QPA',
+      }),
+  }),
+});
 
 export const checkoutSchema = z.object({
   body: z.object({

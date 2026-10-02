@@ -16,7 +16,8 @@
     "prisma:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
     "db:seed": "tsx prisma/seed.ts",
-    "db:fix-slugs": "tsx prisma/fix-slugs.ts"
+    "db:fix-slugs": "tsx prisma/fix-slugs.ts",
+    "db:reissue-order-numbers": "tsx prisma/reissue-order-numbers.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
