@@ -31,6 +31,19 @@ export const trackOrderLimiter = rateLimit({
   },
 });
 
+// Guest checkout is unauthenticated, so cap order spam per IP. Signed-in checkouts are not limited.
+export const guestCheckoutLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: env.isProduction ? 10 : 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => Boolean(req.user),
+  message: {
+    success: false,
+    error: { message: 'Too many orders from this device, please try again later.' },
+  },
+});
+
 // Stricter limiter for authentication endpoints to slow brute-force attempts.
 export const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,

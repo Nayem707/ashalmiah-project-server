@@ -1,4 +1,5 @@
-import { OrderStatus, PaymentMethod, PaymentStatus, Prisma } from '@prisma/client';
+import { createHash, randomBytes, timingSafeEqual } from 'crypto';
+import { CancelledBy, OrderStatus, PaymentMethod, PaymentStatus, Prisma } from '@prisma/client';
 import { prisma } from '../../config/prisma';
 import { ApiError } from '../../utils/apiError';
 import { buildMeta } from '../../utils/pagination';
@@ -12,6 +13,68 @@ import {
 import { normalizeBdMobile } from '../../utils/phone';
 
 const TRACKING_ORDER_LIMIT = 20;
+
+/** Statuses a customer may cancel themselves; later stages go through support. */
+const CUSTOMER_CANCELLABLE: OrderStatus[] = [OrderStatus.PENDING, OrderStatus.CONFIRMED];
+
+// 32 symbols (no 0/O/1/I) so each random byte maps without bias.
+const CANCEL_CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const CANCEL_CODE_LENGTH = 10;
+
+function generateCancelCode() {
+  const chars = Array.from(randomBytes(CANCEL_CODE_LENGTH), (b) => CANCEL_CODE_ALPHABET[b & 31]);
+  return `${chars.slice(0, 5).join('')}-${chars.slice(5).join('')}`;
+}
+
+function hashCancelCode(code: string) {
+  return createHash('sha256')
+    .update(code.toUpperCase().replace(/[^A-Z0-9]/g, ''))
+    .digest('hex');
+}
+
+function cancelCodeMatches(code: string, storedHash: string | null) {
+  if (!storedHash) return false;
+  const given = Buffer.from(hashCancelCode(code), 'hex');
+  const stored = Buffer.from(storedHash, 'hex');
+  return given.length === stored.length && timingSafeEqual(given, stored);
+}
+
+function assertCustomerCancellable(status: OrderStatus) {
+  if (CUSTOMER_CANCELLABLE.includes(status)) return;
+  if (status === OrderStatus.CANCELLED) throw ApiError.conflict('This order is already cancelled');
+  if (status === OrderStatus.PROCESSING) {
+    throw ApiError.conflict(
+      'This order is already being processed. Please contact support to cancel it.',
+    );
+  }
+  throw ApiError.conflict('Shipped or delivered orders cannot be cancelled');
+}
+
+/**
+ * Cancels only if the order still matches `where` (including its current status), so a
+ * repeated or concurrent request finds nothing to update and stock is restored once.
+ */
+async function cancelAndRestock(
+  tx: Prisma.TransactionClient,
+  where: Prisma.OrderWhereInput & { id: string },
+  data: Prisma.OrderUpdateManyMutationInput,
+) {
+  const { count } = await tx.order.updateMany({
+    where,
+    data: { ...data, status: OrderStatus.CANCELLED, cancelledAt: new Date() },
+  });
+  if (count === 0) return false;
+
+  const items = await tx.orderItem.findMany({ where: { orderId: where.id } });
+  for (const item of items) {
+    if (!item.productId) continue;
+    await tx.product.update({
+      where: { id: item.productId },
+      data: { stock: { increment: item.quantity } },
+    });
+  }
+  return true;
+}
 
 const orderItemInclude = {
   product: { select: { id: true, images: true } },
@@ -103,6 +166,9 @@ const publicTrackingSelect = {
   shipPhone: true,
   shipCountry: true,
   shipCity: true,
+  cancelReason: true,
+  cancelledAt: true,
+  cancelledBy: true,
   createdAt: true,
   updatedAt: true,
   items: {
@@ -135,17 +201,20 @@ function shapeOrder<
   T extends {
     items: Array<{ product?: { images?: string[] } | null }>;
     currency?: string | null;
+    guestCancelTokenHash?: string | null;
   },
 >(order: T) {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { guestCancelTokenHash, ...rest } = order;
   return {
-    ...order,
+    ...rest,
     currency: order.currency || 'BDT',
     items: order.items.map(shapeOrderItem),
   };
 }
 
 async function resolveItems(
-  _userId: string,
+  _userId: string | null,
   provided?: CheckoutItemInput[],
 ): Promise<CheckoutItemInput[]> {
   if (!provided?.length) throw ApiError.badRequest('Cart is empty');
@@ -153,8 +222,9 @@ async function resolveItems(
 }
 
 export const ordersService = {
+  /** `userId` is null for guest checkout; it always comes from the verified token, never the body. */
   async checkout(
-    userId: string,
+    userId: string | null,
     input: {
       items?: CheckoutItemInput[];
       paymentMethod?: 'COD' | 'ONLINE';
@@ -232,6 +302,9 @@ export const ordersService = {
     // Orders store amounts in product base currency (unchanged DB prices). Default BDT.
     const orderCurrency = products[0]?.baseCurrency?.toUpperCase() === 'USD' ? 'USD' : 'BDT';
 
+    // Guests can't sign in, so this one-time code (shown once, stored hashed) proves ownership.
+    const guestCancelCode = userId ? null : generateCancelCode();
+
     // Transaction: number the order, create it, decrement stock, clear cart.
     const placeOrder = () =>
       prisma.$transaction(
@@ -258,6 +331,7 @@ export const ordersService = {
               shipCity: input.shipping.city,
               shipStreet: input.shipping.street,
               shipPostalCode: input.shipping.postalCode,
+              guestCancelTokenHash: guestCancelCode ? hashCancelCode(guestCancelCode) : null,
               items: { create: orderItemsData },
             },
             include: orderInclude,
@@ -270,8 +344,10 @@ export const ordersService = {
             });
           }
 
-          const cart = await tx.cart.findUnique({ where: { userId } });
-          if (cart) await tx.cartItem.deleteMany({ where: { cartId: cart.id } });
+          if (userId) {
+            const cart = await tx.cart.findUnique({ where: { userId } });
+            if (cart) await tx.cartItem.deleteMany({ where: { cartId: cart.id } });
+          }
 
           return created;
         },
@@ -287,7 +363,65 @@ export const ordersService = {
       }
     }
 
-    return this.getById(order.id, userId, false);
+    return userId
+      ? this.getById(order.id, userId, false)
+      : { ...shapeOrder(order), guestCancelCode };
+  },
+
+  /** Signed-in customer cancelling their own order; `userId` comes from the verified token. */
+  async cancelMine(id: string, userId: string, reason: string) {
+    const order = await prisma.order.findUnique({
+      where: { id },
+      select: { userId: true, status: true },
+    });
+    if (!order) throw ApiError.notFound('Order not found');
+    if (order.userId !== userId) throw ApiError.forbidden('You cannot access this order');
+    assertCustomerCancellable(order.status);
+
+    const cancelled = await prisma.$transaction((tx) =>
+      cancelAndRestock(
+        tx,
+        { id, userId, status: { in: CUSTOMER_CANCELLABLE } },
+        { cancelReason: reason, cancelledBy: CancelledBy.CUSTOMER },
+      ),
+    );
+    if (!cancelled) {
+      throw ApiError.conflict('This order was just updated. Please refresh and try again.');
+    }
+    return this.getById(id, userId, false);
+  },
+
+  /** Public: guest cancellation requires phone, order number and the checkout cancellation code. */
+  async cancelAsGuest(input: { phone: string; orderNumber: string; code: string; reason: string }) {
+    const order = await prisma.order.findUnique({
+      where: { orderNumber: input.orderNumber },
+      select: { id: true, shipPhone: true, status: true, guestCancelTokenHash: true },
+    });
+    // One message for every mismatch so the response doesn't reveal which detail was wrong.
+    if (
+      !order ||
+      normalizeBdMobile(order.shipPhone) !== input.phone ||
+      !cancelCodeMatches(input.code, order.guestCancelTokenHash)
+    ) {
+      throw ApiError.notFound('Order not found or the cancellation code is incorrect');
+    }
+    assertCustomerCancellable(order.status);
+
+    const cancelled = await prisma.$transaction((tx) =>
+      cancelAndRestock(
+        tx,
+        {
+          id: order.id,
+          guestCancelTokenHash: order.guestCancelTokenHash,
+          status: { in: CUSTOMER_CANCELLABLE },
+        },
+        { cancelReason: input.reason, cancelledBy: CancelledBy.CUSTOMER },
+      ),
+    );
+    if (!cancelled) {
+      throw ApiError.conflict('This order was just updated. Please refresh and try again.');
+    }
+    return this.trackOrderDetails(input.phone, input.orderNumber);
   },
 
   async listMine(
@@ -320,9 +454,12 @@ export const ordersService = {
     skip: number;
     status?: OrderStatus;
     search?: string;
+    customerType?: 'USER' | 'GUEST';
   }) {
     const where: Prisma.OrderWhereInput = {
       ...(params.status ? { status: params.status } : {}),
+      ...(params.customerType === 'USER' ? { userId: { not: null } } : {}),
+      ...(params.customerType === 'GUEST' ? { userId: null } : {}),
       ...(params.search
         ? {
             OR: [
@@ -380,15 +517,18 @@ export const ordersService = {
 
   /** Public, unauthenticated: one order's details, only if it was placed with this mobile number. */
   async trackOrderDetails(phone: string, orderNumber: string) {
-    const order = await prisma.order.findUnique({
+    const found = await prisma.order.findUnique({
       where: { orderNumber },
-      select: publicTrackingSelect,
+      select: { ...publicTrackingSelect, userId: true, guestCancelTokenHash: true },
     });
-    if (!order || normalizeBdMobile(order.shipPhone) !== phone) {
+    if (!found || normalizeBdMobile(found.shipPhone) !== phone) {
       throw ApiError.notFound('No order found for this mobile number');
     }
+    const { userId, guestCancelTokenHash, ...order } = found;
     return {
       ...order,
+      isAccountOrder: Boolean(userId),
+      hasCancelCode: Boolean(guestCancelTokenHash),
       currency: order.currency || 'BDT',
       shipPhone: maskPhone(order.shipPhone),
       items: order.items.map(shapeOrderItem),
@@ -398,7 +538,7 @@ export const ordersService = {
   async updateStatus(id: string, status: OrderStatus, paymentStatus?: PaymentStatus) {
     const order = await prisma.order.findUnique({
       where: { id },
-      include: { items: true },
+      select: { status: true },
     });
     if (!order) throw ApiError.notFound('Order not found');
 
@@ -407,13 +547,13 @@ export const ordersService = {
 
     const updated = await prisma.$transaction(async (tx) => {
       if (becomingCancelled) {
-        for (const item of order.items) {
-          if (!item.productId) continue;
-          await tx.product.update({
-            where: { id: item.productId },
-            data: { stock: { increment: item.quantity } },
-          });
-        }
+        const cancelled = await cancelAndRestock(
+          tx,
+          { id, status: { not: OrderStatus.CANCELLED } },
+          { cancelledBy: CancelledBy.ADMIN, ...(paymentStatus ? { paymentStatus } : {}) },
+        );
+        if (!cancelled) throw ApiError.conflict('This order is already cancelled');
+        return tx.order.findUniqueOrThrow({ where: { id }, include: orderAdminInclude });
       }
 
       return tx.order.update({

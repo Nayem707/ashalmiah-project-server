@@ -7,7 +7,7 @@ import { ordersService } from './orders.service';
 
 export const ordersController = {
   checkout: asyncHandler(async (req: Request, res: Response) => {
-    return sendCreated(res, await ordersService.checkout(req.user!.sub, req.body));
+    return sendCreated(res, await ordersService.checkout(req.user?.sub ?? null, req.body));
   }),
 
   listMine: asyncHandler(async (req: Request, res: Response) => {
@@ -29,6 +29,7 @@ export const ordersController = {
       skip,
       status: req.query.status as OrderStatus | undefined,
       search: req.query.search as string | undefined,
+      customerType: req.query.customerType as 'USER' | 'GUEST' | undefined,
     });
     return sendSuccess(res, result.items, 200, result.meta);
   }),
@@ -41,6 +42,21 @@ export const ordersController = {
     return sendSuccess(
       res,
       await ordersService.trackOrderDetails(req.body.phone, req.body.orderNumber),
+    );
+  }),
+
+  cancelMine: asyncHandler(async (req: Request, res: Response) => {
+    return sendSuccess(
+      res,
+      await ordersService.cancelMine(req.params.id, req.user!.sub, req.body.reason),
+    );
+  }),
+
+  cancelAsGuest: asyncHandler(async (req: Request, res: Response) => {
+    const { phone, orderNumber, code, reason } = req.body;
+    return sendSuccess(
+      res,
+      await ordersService.cancelAsGuest({ phone, orderNumber, code, reason }),
     );
   }),
 

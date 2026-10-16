@@ -17,13 +17,36 @@ export const trackOrderSchema = z.object({
   body: z.object({ phone: mobileNumber }),
 });
 
+const orderNumber = z
+  .string({ required_error: 'Please select an order' })
+  .transform((value) => value.trim().toUpperCase())
+  .refine((value) => ORDER_NUMBER_PATTERN.test(value), 'Please select a valid order');
+
+const cancelReason = z
+  .string({ required_error: 'Please tell us why you are cancelling' })
+  .trim()
+  .min(3, 'Please tell us why you are cancelling')
+  .max(500, 'Reason must be 500 characters or fewer');
+
 export const trackOrderDetailsSchema = z.object({
+  body: z.object({ phone: mobileNumber, orderNumber }),
+});
+
+export const cancelOrderSchema = z.object({
+  params: z.object({ id: z.string().min(1) }),
+  body: z.object({ reason: cancelReason }),
+});
+
+export const guestCancelOrderSchema = z.object({
   body: z.object({
     phone: mobileNumber,
-    orderNumber: z
-      .string({ required_error: 'Please select an order' })
-      .transform((value) => value.trim().toUpperCase())
-      .refine((value) => ORDER_NUMBER_PATTERN.test(value), 'Please select a valid order'),
+    orderNumber,
+    code: z
+      .string({ required_error: 'Please enter your cancellation code' })
+      .trim()
+      .min(1, 'Please enter your cancellation code')
+      .max(32),
+    reason: cancelReason,
   }),
 });
 
@@ -60,6 +83,7 @@ export const listOrdersSchema = z.object({
       .enum(['PENDING', 'CONFIRMED', 'PROCESSING', 'SHIPPED', 'DELIVERED', 'CANCELLED'])
       .optional(),
     search: z.string().optional(),
+    customerType: z.enum(['USER', 'GUEST']).optional(),
   }),
 });
 

@@ -55,6 +55,11 @@ enum PaymentMethod {
   ONLINE
 }
 
+enum CancelledBy {
+  CUSTOMER
+  ADMIN
+}
+
 enum AddressType {
   SHIPPING
   BILLING
@@ -280,8 +285,9 @@ model WishlistItem {
 model Order {
   id            String        @id @default(cuid())
   orderNumber   String        @unique
-  userId        String
-  user          User          @relation(fields: [userId], references: [id])
+  /// Null for guest checkout orders.
+  userId        String?
+  user          User?         @relation(fields: [userId], references: [id], onDelete: Restrict)
   status        OrderStatus   @default(PENDING)
   subtotal      Decimal       @db.Decimal(10, 2)
   discount      Decimal       @default(0) @db.Decimal(10, 2)
@@ -298,6 +304,12 @@ model Order {
   shipCity      String
   shipStreet    String
   shipPostalCode String?
+
+  cancelReason  String?
+  cancelledAt   DateTime?
+  cancelledBy   CancelledBy?
+  /// SHA-256 of the code shown to a guest at checkout; required for guest self-cancellation.
+  guestCancelTokenHash String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
