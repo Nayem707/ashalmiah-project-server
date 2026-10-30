@@ -291,8 +291,9 @@ export const ordersService = {
         }
       }
 
-      // Package pricing: when selected, the DB package price is the base (then product discount
-      // applies). The name/price are snapshotted so the order is stable if the package changes later.
+      // Package pricing: a selected package is an ADD-ON — its DB price is added to the product
+      // price, then the product discount applies. The name/price are snapshotted so the order is
+      // stable if the package is later renamed or removed. No package = product price only.
       let basePrice = Number(product.price);
       let packageId: string | null = null;
       let packageName: string | null = null;
@@ -305,7 +306,7 @@ export const ordersService = {
         if (!pkg.products.some((pp) => pp.productId === product.id)) {
           throw ApiError.badRequest(`Selected package does not belong to ${product.name}`);
         }
-        basePrice = Number(pkg.price);
+        basePrice = Number(product.price) + Number(pkg.price);
         packageId = pkg.id;
         packageName = pkg.name;
         packagePrice = Number(pkg.price);

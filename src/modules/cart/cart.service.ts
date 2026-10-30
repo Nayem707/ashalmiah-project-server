@@ -39,8 +39,8 @@ async function buildCartResponse(userId: string) {
 
   const items = (cart?.items ?? []).map((item) => {
     const pkg = item.selectedPackage;
-    // Package price (DB-trusted) replaces the product price as the pricing base when selected.
-    const base = pkg ? Number(pkg.price) : Number(item.product.price);
+    // A selected package is an add-on: its price is ADDED to the product price (DB-trusted).
+    const base = Number(item.product.price) + (pkg ? Number(pkg.price) : 0);
     const unitPrice = priceAfterDiscount(base, item.product.discount);
     return {
       id: item.id,
