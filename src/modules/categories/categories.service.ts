@@ -31,6 +31,17 @@ export const categoriesService = {
           // Storefront counts must match what the public product list returns.
           select: { products: includeInactive ? true : { where: { status: 'ACTIVE' } } },
         },
+        subcategories: {
+          where: includeInactive ? {} : { status: 'ACTIVE' },
+          orderBy: { name: 'asc' },
+          include: {
+            _count: {
+              select: {
+                products: includeInactive ? true : { where: { status: 'ACTIVE' } },
+              },
+            },
+          },
+        },
       },
     });
   },
@@ -101,6 +112,10 @@ export const categoriesService = {
   async remove(id: string) {
     const existing = await prisma.category.findUnique({ where: { id } });
     if (!existing) throw ApiError.notFound('Category not found');
+    const subcategoryCount = await prisma.subcategory.count({ where: { categoryId: id } });
+    if (subcategoryCount > 0) {
+      throw ApiError.conflict('Cannot delete a category that still has subcategories');
+    }
     const count = await prisma.product.count({ where: { categoryId: id } });
     if (count > 0) {
       throw ApiError.conflict('Cannot delete a category that still has products');

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import authRoutes from '../modules/auth/auth.routes';
 import usersRoutes from '../modules/users/users.routes';
 import categoriesRoutes from '../modules/categories/categories.routes';
+import subcategoriesRoutes from '../modules/subcategories/subcategories.routes';
 import productsRoutes from '../modules/products/products.routes';
 import attributesRoutes from '../modules/attributes/attributes.routes';
 import packagesRoutes from '../modules/packages/packages.routes';
@@ -23,6 +24,7 @@ router.get('/health', (_req, res) => {
 router.use('/auth', authRoutes);
 router.use('/users', usersRoutes);
 router.use('/categories', categoriesRoutes);
+router.use('/subcategories', subcategoriesRoutes);
 router.use('/products', productsRoutes);
 router.use('/attributes', attributesRoutes);
 router.use('/packages', packagesRoutes);

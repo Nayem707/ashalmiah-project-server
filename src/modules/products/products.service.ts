@@ -12,6 +12,7 @@ import { packageInclude, shapePackage } from '../packages/packages.service';
 
 const productInclude = {
   category: { select: { id: true, name: true, title: true, slug: true } },
+  subcategory: { select: { id: true, name: true, title: true, slug: true } },
   colors: { include: { color: true } },
   sizes: { include: { size: true } },
   packages: {
@@ -32,6 +33,10 @@ function shape(p: ProductWithRelations, isAdmin = false) {
     category: p.category?.name,
     categoryTitle: p.category?.title || p.category?.name,
     categorySlug: p.category?.slug,
+    subcategoryId: p.subcategoryId,
+    subcategory: p.subcategory?.name ?? null,
+    subcategoryTitle: p.subcategory?.title || p.subcategory?.name || null,
+    subcategorySlug: p.subcategory?.slug ?? null,
     description: p.description,
     shortDescription: p.shortDescription ?? [],
     price: Number(p.price),
@@ -90,6 +95,7 @@ interface ListParams {
   skip: number;
   search?: string;
   category?: string;
+  subcategory?: string;
   colors?: string[];
   sizes?: string[];
   status?: 'ACTIVE' | 'DRAFT' | 'ARCHIVED';
@@ -128,6 +134,26 @@ async function assertPackageIds(packageIds?: string[]) {
   const uniqueIds = [...new Set(packageIds)];
   const count = await prisma.package.count({ where: { id: { in: uniqueIds } } });
   if (count !== uniqueIds.length) throw ApiError.badRequest('One or more packageIds are invalid');
+}
+
+/**
+ * Validates an optional subcategory selection: it must exist and belong to `categoryId`.
+ * Returns `null` when cleared, `undefined` to leave unchanged, or the valid id.
+ */
+async function resolveSubcategoryId(
+  subcategoryId: string | null | undefined,
+  categoryId: string | undefined,
+  currentCategoryId?: string,
+): Promise<string | null | undefined> {
+  if (subcategoryId === undefined) return undefined;
+  if (!subcategoryId) return null;
+  const subcategory = await prisma.subcategory.findUnique({ where: { id: subcategoryId } });
+  if (!subcategory) throw ApiError.badRequest('Invalid subcategoryId');
+  const effectiveCategory = categoryId ?? currentCategoryId;
+  if (effectiveCategory && subcategory.categoryId !== effectiveCategory) {
+    throw ApiError.badRequest('Subcategory does not belong to the selected category');
+  }
+  return subcategory.id;
 }
 
 /**
@@ -170,6 +196,13 @@ export const productsService = {
         ? {
             category: {
               OR: [{ id: params.category }, { slug: params.category }],
+            },
+          }
+        : {}),
+      ...(params.subcategory
+        ? {
+            subcategory: {
+              OR: [{ id: params.subcategory }, { slug: params.subcategory }],
             },
           }
         : {}),
@@ -265,6 +298,7 @@ export const productsService = {
     name: string;
     sku: string;
     categoryId: string;
+    subcategoryId?: string | null;
     description?: string;
     shortDescription?: string[];
     price: number;
@@ -287,6 +321,7 @@ export const productsService = {
     await assertUniqueSku(data.sku);
     await assertAttributeIds(data.colorIds, data.sizeIds);
     await assertPackageIds(data.packageIds);
+    const subcategoryId = await resolveSubcategoryId(data.subcategoryId, data.categoryId);
 
     const slug = await uniqueSlug(data.name);
     const baseCurrency =
@@ -297,6 +332,7 @@ export const productsService = {
         slug,
         sku: data.sku,
         categoryId: data.categoryId,
+        subcategoryId: subcategoryId ?? null,
         description: cleanDescription(data.description),
         shortDescription: cleanHighlights(data.shortDescription) ?? [],
         price: data.price,
@@ -344,6 +380,7 @@ export const productsService = {
       sizeIds: string[];
       packageIds: string[];
       defaultPackageId: string;
+      subcategoryId: string | null;
     }>,
   ) {
     const existing = await prisma.product.findUnique({ where: { id } });
@@ -357,6 +394,24 @@ export const productsService = {
     if (data.sku) await assertUniqueSku(data.sku, id);
     await assertAttributeIds(data.colorIds, data.sizeIds);
     await assertPackageIds(data.packageIds);
+
+    let subcategoryUpdate = await resolveSubcategoryId(
+      data.subcategoryId,
+      data.categoryId,
+      existing.categoryId,
+    );
+    // If the main category changed and no subcategory was supplied, drop a now-mismatched one.
+    if (
+      subcategoryUpdate === undefined &&
+      data.categoryId &&
+      data.categoryId !== existing.categoryId &&
+      existing.subcategoryId
+    ) {
+      const sub = await prisma.subcategory.findUnique({
+        where: { id: existing.subcategoryId },
+      });
+      if (!sub || sub.categoryId !== data.categoryId) subcategoryUpdate = null;
+    }
 
     const slug = data.name ? await uniqueSlug(data.name, id) : undefined;
     const baseCurrency =
@@ -373,6 +428,7 @@ export const productsService = {
         ...(slug ? { slug } : {}),
         sku: data.sku,
         categoryId: data.categoryId,
+        ...(subcategoryUpdate !== undefined ? { subcategoryId: subcategoryUpdate } : {}),
         description: cleanDescription(data.description),
         shortDescription: cleanHighlights(data.shortDescription),
         price: data.price,
