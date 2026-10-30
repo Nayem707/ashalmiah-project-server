@@ -157,8 +157,30 @@ model Category {
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
 
+  products      Product[]
+  subcategories Subcategory[]
+
+  @@index([status])
+}
+
+/// A child of a Category (second level). Products may be assigned to a subcategory,
+/// but always keep the parent `categoryId` so main-category listings aggregate them.
+model Subcategory {
+  id          String         @id @default(cuid())
+  name        String
+  title       String?
+  slug        String         @unique
+  description String?
+  image       String?
+  status      CategoryStatus @default(ACTIVE)
+  categoryId  String
+  category    Category       @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
   products Product[]
 
+  @@index([categoryId])
   @@index([status])
 }
 
@@ -189,6 +211,8 @@ model Product {
   sku         String        @unique
   categoryId  String
   category    Category      @relation(fields: [categoryId], references: [id])
+  subcategoryId String?
+  subcategory Subcategory?  @relation(fields: [subcategoryId], references: [id])
   description String?
   /// Up to 5 highlight bullet points shown above the full description.
   shortDescription String[] @default([])
@@ -216,6 +240,7 @@ model Product {
   packages   ProductPackage[]
 
   @@index([categoryId])
+  @@index([subcategoryId])
   @@index([status])
   @@index([featured])
   @@index([popular])

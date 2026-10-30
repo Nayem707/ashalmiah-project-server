@@ -29,6 +29,7 @@ export const productsController = {
       skip,
       search: q.search,
       category: q.category,
+      subcategory: q.subcategory,
       colors: parseCsv(q.color),
       sizes: parseCsv(q.size),
       status: q.status as 'ACTIVE' | 'DRAFT' | 'ARCHIVED' | undefined,

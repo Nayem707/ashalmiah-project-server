@@ -6,6 +6,7 @@ export const listProductsSchema = z.object({
     limit: z.coerce.number().int().positive().max(100).optional(),
     search: z.string().optional(),
     category: z.string().optional(), // category id or slug
+    subcategory: z.string().optional(), // subcategory id or slug
     color: z.string().optional(), // comma-separated color ids or names
     size: z.string().optional(), // comma-separated size ids or names
     status: z.enum(['ACTIVE', 'DRAFT', 'ARCHIVED']).optional(),
@@ -38,6 +39,7 @@ const productBody = {
   name: z.string().min(2).max(200),
   sku: z.string().min(1).max(60),
   categoryId: z.string().min(1),
+  subcategoryId: z.union([z.string().min(1), z.literal(''), z.null()]).optional(),
   description: z.string().max(20000).optional(),
   shortDescription: z.array(z.string().trim().max(200)).max(5).optional(),
   price: z.coerce.number().positive(),
@@ -65,6 +67,7 @@ export const updateProductSchema = z.object({
     name: productBody.name.optional(),
     sku: productBody.sku.optional(),
     categoryId: productBody.categoryId.optional(),
+    subcategoryId: productBody.subcategoryId,
     description: productBody.description,
     shortDescription: productBody.shortDescription,
     price: productBody.price.optional(),
