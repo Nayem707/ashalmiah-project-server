@@ -59,6 +59,7 @@ export const checkoutSchema = z.object({
           quantity: z.number().int().positive(),
           selectedColor: z.string().optional(),
           selectedSize: z.string().optional(),
+          selectedPackageId: z.string().optional(),
         }),
       )
       .min(1, 'Cart is empty'),

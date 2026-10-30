@@ -97,6 +97,7 @@ interface CheckoutItemInput {
   quantity: number;
   selectedColor?: string;
   selectedSize?: string;
+  selectedPackageId?: string;
 }
 
 interface ShippingInput {
@@ -179,6 +180,9 @@ const publicTrackingSelect = {
       unitPrice: true,
       selectedColor: true,
       selectedSize: true,
+      packageId: true,
+      packageName: true,
+      packagePrice: true,
       subtotal: true,
       product: { select: { images: true } },
     },
@@ -242,6 +246,18 @@ export const ordersService = {
     });
     const productMap = new Map(products.map((p) => [p.id, p]));
 
+    // Fetch any selected packages once; prices come from the DB, never the client.
+    const selectedPackageIds = [
+      ...new Set(items.map((i) => i.selectedPackageId).filter((id): id is string => Boolean(id))),
+    ];
+    const packages = selectedPackageIds.length
+      ? await prisma.package.findMany({
+          where: { id: { in: selectedPackageIds } },
+          include: { products: { select: { productId: true } } },
+        })
+      : [];
+    const packageMap = new Map(packages.map((p) => [p.id, p]));
+
     // Validate availability and compute totals server-side.
     let subtotal = 0;
     let discountTotal = 0;
@@ -275,7 +291,26 @@ export const ordersService = {
         }
       }
 
-      const basePrice = Number(product.price);
+      // Package pricing: when selected, the DB package price is the base (then product discount
+      // applies). The name/price are snapshotted so the order is stable if the package changes later.
+      let basePrice = Number(product.price);
+      let packageId: string | null = null;
+      let packageName: string | null = null;
+      let packagePrice: number | null = null;
+      if (item.selectedPackageId) {
+        const pkg = packageMap.get(item.selectedPackageId);
+        if (!pkg || pkg.status !== 'ACTIVE') {
+          throw ApiError.badRequest(`Selected package is not available for ${product.name}`);
+        }
+        if (!pkg.products.some((pp) => pp.productId === product.id)) {
+          throw ApiError.badRequest(`Selected package does not belong to ${product.name}`);
+        }
+        basePrice = Number(pkg.price);
+        packageId = pkg.id;
+        packageName = pkg.name;
+        packagePrice = Number(pkg.price);
+      }
+
       const unitPrice = round(basePrice * (1 - product.discount / 100));
       const lineSubtotal = round(unitPrice * item.quantity);
       subtotal += round(basePrice * item.quantity);
@@ -287,6 +322,9 @@ export const ordersService = {
         unitPrice,
         selectedColor: item.selectedColor,
         selectedSize: item.selectedSize,
+        packageId,
+        packageName,
+        packagePrice,
         subtotal: lineSubtotal,
       };
     });

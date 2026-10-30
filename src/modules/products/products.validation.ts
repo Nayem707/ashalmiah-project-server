@@ -51,6 +51,8 @@ const productBody = {
   images: z.array(imageRef).optional(),
   colorIds: z.array(z.string().min(1)).optional(),
   sizeIds: z.array(z.string().min(1)).optional(),
+  packageIds: z.array(z.string().min(1)).optional(),
+  defaultPackageId: z.string().min(1).optional(),
 };
 
 export const createProductSchema = z.object({
@@ -76,5 +78,7 @@ export const updateProductSchema = z.object({
     images: productBody.images,
     colorIds: productBody.colorIds,
     sizeIds: productBody.sizeIds,
+    packageIds: productBody.packageIds,
+    defaultPackageId: productBody.defaultPackageId,
   }),
 });

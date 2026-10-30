@@ -71,6 +71,11 @@ enum ReviewStatus {
   HIDDEN
 }
 
+enum PackageStatus {
+  ACTIVE
+  INACTIVE
+}
+
 enum AuthProvider {
   LOCAL
   GOOGLE
@@ -208,6 +213,7 @@ model Product {
   wishlisted WishlistItem[]
   cartItems  CartItem[]
   orderItems OrderItem[]
+  packages   ProductPackage[]
 
   @@index([categoryId])
   @@index([status])
@@ -237,6 +243,66 @@ model ProductSize {
 }
 
 // ----------------------------------------------------------------------------
+// Product packages (combo bundles, e.g. "Chador + 2 Porda")
+// ----------------------------------------------------------------------------
+
+/// Reusable component catalogue shared across packages (e.g. Chador, Porda).
+model PackageItem {
+  id        String   @id @default(cuid())
+  name      String
+  variant   String?
+  unitPrice Decimal  @db.Decimal(10, 2)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lines PackageLine[]
+}
+
+/// A sellable bundle. Its `price` is the source of truth charged at checkout.
+model Package {
+  id          String        @id @default(cuid())
+  name        String
+  description String?
+  price       Decimal       @db.Decimal(10, 2)
+  status      PackageStatus @default(ACTIVE)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  lines      PackageLine[]
+  products   ProductPackage[]
+  cartItems  CartItem[]
+  orderItems OrderItem[]
+
+  @@index([status])
+}
+
+/// A component line inside a package (component + quantity).
+model PackageLine {
+  id            String      @id @default(cuid())
+  packageId     String
+  package       Package     @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  packageItemId String
+  packageItem   PackageItem @relation(fields: [packageItemId], references: [id], onDelete: Restrict)
+  quantity      Int         @default(1)
+
+  @@index([packageId])
+  @@index([packageItemId])
+}
+
+/// Many-to-many Product <-> Package with a per-product default and ordering.
+model ProductPackage {
+  productId String
+  packageId String
+  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  package   Package @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  isDefault Boolean @default(false)
+  sortOrder Int     @default(0)
+
+  @@id([productId, packageId])
+  @@index([packageId])
+}
+
+// ----------------------------------------------------------------------------
 // Cart & wishlist
 // ----------------------------------------------------------------------------
 
@@ -259,11 +325,14 @@ model CartItem {
   quantity      Int      @default(1)
   selectedColor String?
   selectedSize  String?
+  selectedPackageId String?
+  selectedPackage   Package? @relation(fields: [selectedPackageId], references: [id], onDelete: SetNull)
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  @@unique([cartId, productId, selectedColor, selectedSize])
+  @@unique([cartId, productId, selectedColor, selectedSize, selectedPackageId])
   @@index([cartId])
+  @@index([selectedPackageId])
 }
 
 model WishlistItem {
@@ -331,9 +400,16 @@ model OrderItem {
   unitPrice     Decimal  @db.Decimal(10, 2)
   selectedColor String?
   selectedSize  String?
+  /// Package snapshot: id for reference, name/price frozen at purchase time so the
+  /// customer always sees the bundle they bought even if it is later renamed/removed.
+  packageId     String?
+  package       Package? @relation(fields: [packageId], references: [id], onDelete: SetNull)
+  packageName   String?
+  packagePrice  Decimal? @db.Decimal(10, 2)
   subtotal      Decimal  @db.Decimal(10, 2)
 
   @@index([orderId])
+  @@index([packageId])
 }
 
 // ----------------------------------------------------------------------------

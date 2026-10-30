@@ -29,26 +29,46 @@ async function buildCartResponse(userId: string) {
               stock: true,
             },
           },
+          selectedPackage: {
+            include: { lines: { include: { packageItem: true } } },
+          },
         },
       },
     },
   });
 
   const items = (cart?.items ?? []).map((item) => {
-    const price = Number(item.product.price);
-    const unitPrice = priceAfterDiscount(price, item.product.discount);
+    const pkg = item.selectedPackage;
+    // Package price (DB-trusted) replaces the product price as the pricing base when selected.
+    const base = pkg ? Number(pkg.price) : Number(item.product.price);
+    const unitPrice = priceAfterDiscount(base, item.product.discount);
     return {
       id: item.id,
       productId: item.productId,
       name: item.product.name,
       slug: item.product.slug,
       image: item.product.images[0] ?? null,
-      price,
+      price: base,
+      productPrice: Number(item.product.price),
       discount: item.product.discount,
       unitPrice,
       quantity: item.quantity,
       selectedColor: item.selectedColor,
       selectedSize: item.selectedSize,
+      selectedPackageId: item.selectedPackageId,
+      selectedPackage: pkg
+        ? {
+            id: pkg.id,
+            name: pkg.name,
+            price: Number(pkg.price),
+            status: pkg.status,
+            items: pkg.lines.map((line) => ({
+              name: line.packageItem.name,
+              variant: line.packageItem.variant,
+              quantity: line.quantity,
+            })),
+          }
+        : null,
       stock: item.product.stock,
       lineTotal: Math.round(unitPrice * item.quantity * 100) / 100,
     };
@@ -67,13 +87,32 @@ export const cartService = {
 
   async addItem(
     userId: string,
-    input: { productId: string; quantity?: number; selectedColor?: string; selectedSize?: string },
+    input: {
+      productId: string;
+      quantity?: number;
+      selectedColor?: string;
+      selectedSize?: string;
+      selectedPackageId?: string;
+    },
   ) {
     const product = await prisma.product.findUnique({ where: { id: input.productId } });
     if (!product || product.status !== 'ACTIVE') throw ApiError.notFound('Product not available');
 
     const quantity = input.quantity ?? 1;
     if (product.stock < quantity) throw ApiError.badRequest('Insufficient stock');
+
+    // A package may only be added if it is active and assigned to this product.
+    if (input.selectedPackageId) {
+      const pkg = await prisma.package.findFirst({
+        where: {
+          id: input.selectedPackageId,
+          status: 'ACTIVE',
+          products: { some: { productId: input.productId } },
+        },
+        select: { id: true },
+      });
+      if (!pkg) throw ApiError.badRequest('Selected package is not available for this product');
+    }
 
     const cart = await getOrCreateCart(userId);
 
@@ -83,6 +122,7 @@ export const cartService = {
         productId: input.productId,
         selectedColor: input.selectedColor ?? null,
         selectedSize: input.selectedSize ?? null,
+        selectedPackageId: input.selectedPackageId ?? null,
       },
     });
 
@@ -98,6 +138,7 @@ export const cartService = {
           quantity,
           selectedColor: input.selectedColor,
           selectedSize: input.selectedSize,
+          selectedPackageId: input.selectedPackageId,
         },
       });
     }

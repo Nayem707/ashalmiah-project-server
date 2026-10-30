@@ -8,16 +8,21 @@ import {
   deleteLocalUpload,
   extractUploadKey,
 } from '../uploads/uploads.utils';
+import { packageInclude, shapePackage } from '../packages/packages.service';
 
 const productInclude = {
   category: { select: { id: true, name: true, title: true, slug: true } },
   colors: { include: { color: true } },
   sizes: { include: { size: true } },
+  packages: {
+    orderBy: { sortOrder: 'asc' },
+    include: { package: { include: packageInclude } },
+  },
 } satisfies Prisma.ProductInclude;
 
 type ProductWithRelations = Prisma.ProductGetPayload<{ include: typeof productInclude }>;
 
-function shape(p: ProductWithRelations) {
+function shape(p: ProductWithRelations, isAdmin = false) {
   return {
     id: p.id,
     name: p.name,
@@ -44,6 +49,14 @@ function shape(p: ProductWithRelations) {
     colorIds: p.colors.map((c) => c.color.id),
     sizes: p.sizes.map((s) => s.size.name),
     sizeIds: p.sizes.map((s) => s.size.id),
+    // Storefront only sees active packages; admin sees all so inactive ones stay editable.
+    packages: p.packages
+      .filter((pp) => isAdmin || pp.package.status === 'ACTIVE')
+      .map((pp) => ({
+        ...shapePackage(pp.package),
+        isDefault: pp.isDefault,
+        sortOrder: pp.sortOrder,
+      })),
     createdAt: p.createdAt,
     updatedAt: p.updatedAt,
   };
@@ -108,6 +121,28 @@ async function assertAttributeIds(colorIds?: string[], sizeIds?: string[]) {
     const count = await prisma.size.count({ where: { id: { in: uniqueIds } } });
     if (count !== uniqueIds.length) throw ApiError.badRequest('One or more sizeIds are invalid');
   }
+}
+
+async function assertPackageIds(packageIds?: string[]) {
+  if (!packageIds?.length) return;
+  const uniqueIds = [...new Set(packageIds)];
+  const count = await prisma.package.count({ where: { id: { in: uniqueIds } } });
+  if (count !== uniqueIds.length) throw ApiError.badRequest('One or more packageIds are invalid');
+}
+
+/**
+ * Builds the ProductPackage rows for a product. Order of `packageIds` sets `sortOrder`;
+ * `defaultPackageId` marks the default (falls back to the first package so there is always one).
+ */
+function buildPackageRows(packageIds: string[], defaultPackageId?: string) {
+  const uniqueIds = [...new Set(packageIds)];
+  const fallbackDefault =
+    defaultPackageId && uniqueIds.includes(defaultPackageId) ? defaultPackageId : uniqueIds[0];
+  return uniqueIds.map((packageId, index) => ({
+    packageId,
+    isDefault: packageId === fallbackDefault,
+    sortOrder: index,
+  }));
 }
 
 function buildOrderBy(sort?: ListParams['sort']): Prisma.ProductOrderByWithRelationInput {
@@ -199,7 +234,7 @@ export const productsService = {
     ]);
 
     return {
-      items: items.map(shape),
+      items: items.map((item) => shape(item, params.isAdmin)),
       meta: buildMeta(params.page, params.limit, total),
     };
   },
@@ -213,7 +248,7 @@ export const productsService = {
     if (!isAdmin && product.status !== 'ACTIVE') {
       throw ApiError.notFound('Product not found');
     }
-    return shape(product);
+    return shape(product, isAdmin);
   },
 
   async getByFlag(flag: 'featured' | 'popular' | 'newArrival', limit = 8) {
@@ -223,7 +258,7 @@ export const productsService = {
       orderBy: { createdAt: 'desc' },
       include: productInclude,
     });
-    return items.map(shape);
+    return items.map((item) => shape(item));
   },
 
   async create(data: {
@@ -243,12 +278,15 @@ export const productsService = {
     images?: string[];
     colorIds?: string[];
     sizeIds?: string[];
+    packageIds?: string[];
+    defaultPackageId?: string;
   }) {
     const category = await prisma.category.findUnique({ where: { id: data.categoryId } });
     if (!category) throw ApiError.badRequest('Invalid categoryId');
 
     await assertUniqueSku(data.sku);
     await assertAttributeIds(data.colorIds, data.sizeIds);
+    await assertPackageIds(data.packageIds);
 
     const slug = await uniqueSlug(data.name);
     const baseCurrency =
@@ -276,10 +314,13 @@ export const productsService = {
         sizes: data.sizeIds?.length
           ? { create: data.sizeIds.map((sizeId) => ({ sizeId })) }
           : undefined,
+        packages: data.packageIds?.length
+          ? { create: buildPackageRows(data.packageIds, data.defaultPackageId) }
+          : undefined,
       },
       include: productInclude,
     });
-    return shape(product);
+    return shape(product, true);
   },
 
   async update(
@@ -301,6 +342,8 @@ export const productsService = {
       images: string[];
       colorIds: string[];
       sizeIds: string[];
+      packageIds: string[];
+      defaultPackageId: string;
     }>,
   ) {
     const existing = await prisma.product.findUnique({ where: { id } });
@@ -313,6 +356,7 @@ export const productsService = {
 
     if (data.sku) await assertUniqueSku(data.sku, id);
     await assertAttributeIds(data.colorIds, data.sizeIds);
+    await assertPackageIds(data.packageIds);
 
     const slug = data.name ? await uniqueSlug(data.name, id) : undefined;
     const baseCurrency =
@@ -346,6 +390,14 @@ export const productsService = {
         ...(data.sizeIds
           ? { sizes: { deleteMany: {}, create: data.sizeIds.map((sizeId) => ({ sizeId })) } }
           : {}),
+        ...(data.packageIds
+          ? {
+              packages: {
+                deleteMany: {},
+                create: buildPackageRows(data.packageIds, data.defaultPackageId),
+              },
+            }
+          : {}),
       },
       include: productInclude,
     });
@@ -359,7 +411,7 @@ export const productsService = {
       }
     }
 
-    return shape(product);
+    return shape(product, true);
   },
 
   async remove(id: string) {
