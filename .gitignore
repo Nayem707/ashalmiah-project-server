@@ -4,8 +4,11 @@ dist/
 coverage/
 .DS_Store
 uploads/
+<<<<<<< HEAD
 # Environment variables
 .env
+=======
+>>>>>>> e192e02e9e4854d496f6d56ccd199356fabf4243
 
 
 branch_structure.json
